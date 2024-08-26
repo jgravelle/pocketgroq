@@ -1,0 +1,2 @@
+groq>=0.3.0
+python-dotenv>=0.19.1
