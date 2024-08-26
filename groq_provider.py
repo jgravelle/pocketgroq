@@ -1,8 +1,17 @@
+groq_provider.py
+
 import os
 import json
 from typing import Dict, Any, List, Union, AsyncIterator
 import asyncio
-from groq import Groq, AsyncGroq
+
+try:
+    from groq import Groq, AsyncGroq
+except ImportError:
+    print("Warning: Unable to import Groq and AsyncGroq from groq package. Make sure you have the correct version installed.")
+    Groq = None
+    AsyncGroq = None
+
 from .exceptions import GroqAPIKeyMissingError, GroqAPIError
 from .config import get_api_key
 
@@ -11,6 +20,8 @@ class GroqProvider:
         self.api_key = api_key or get_api_key()
         if not self.api_key:
             raise GroqAPIKeyMissingError("Groq API key is not provided")
+        if Groq is None or AsyncGroq is None:
+            raise ImportError("Groq and AsyncGroq classes could not be imported. Please check your groq package installation.")
         self.client = Groq(api_key=self.api_key)
         self.async_client = AsyncGroq(api_key=self.api_key)
         self.tool_use_models = [
