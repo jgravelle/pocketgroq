@@ -1,5 +1,10 @@
 README.md
 setup.py
+pocketgroq/__init__.py
+pocketgroq/config.py
+pocketgroq/exceptions.py
+pocketgroq/groq_provider.py
+pocketgroq/utils.py
 pocketgroq.egg-info/PKG-INFO
 pocketgroq.egg-info/SOURCES.txt
 pocketgroq.egg-info/dependency_links.txt

@@ -1,10 +1,10 @@
 Metadata-Version: 2.1
 Name: pocketgroq
-Version: 0.1.0
+Version: 0.1.4
 Summary: A library for easy integration with Groq API
-Home-page: https://github.com/yourusername/pocketgroq
-Author: Your Name
-Author-email: your.email@example.com
+Home-page: https://github.com/jgravelle/pocketgroq
+Author: PocketGroq Team
+Author-email: pocketgroq@example.com
 Classifier: Development Status :: 3 - Alpha
 Classifier: Intended Audience :: Developers
 Classifier: License :: OSI Approved :: MIT License
@@ -13,9 +13,11 @@ Classifier: Programming Language :: Python :: 3
 Classifier: Programming Language :: Python :: 3.7
 Classifier: Programming Language :: Python :: 3.8
 Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
 Requires-Python: >=3.7
 Description-Content-Type: text/markdown
-Requires-Dist: groq==0.3.0
+Requires-Dist: groq==0.8.0
 Requires-Dist: python-dotenv==0.19.1
 Provides-Extra: dev
 Requires-Dist: pytest==7.3.1; extra == "dev"
