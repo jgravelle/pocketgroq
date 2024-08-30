@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="pocketgroq",
-    version="0.1.4",
+    version="0.1.5",
     author="PocketGroq Team",
     author_email="pocketgroq@example.com",
     description="A library for easy integration with Groq API",

@@ -1,189 +1,158 @@
 # PocketGroq
 
-PocketGroq is a powerful and user-friendly Python library that provides seamless integration with the Groq API. It offers a simple interface to leverage Groq's advanced language models for various natural language processing tasks, including text generation, tool use, and more.
-
-## Table of Contents
-
-1. [Installation](#installation)
-2. [Configuration](#configuration)
-3. [Basic Usage](#basic-usage)
-4. [Advanced Features](#advanced-features)
-   - [JSON Mode](#json-mode)
-   - [Streaming](#streaming)
-   - [Tool Use](#tool-use)
-   - [Asynchronous Operations](#asynchronous-operations)
-5. [Error Handling](#error-handling)
-6. [Best Practices](#best-practices)
-7. [Contributing](#contributing)
-8. [License](#license)
+PocketGroq provides a simpler interface to interact with the Groq API, aiding in rapid development by abstracting complex API calls into simple functions.
 
 ## Installation
 
-Install PocketGroq using pip:
+1. Clone the repository or download the source code:
 
 ```bash
-pip install pocketgroq
+git clone https://github.com/jgravelle/pocketgroq.git
+cd pocketgroq
 ```
 
-## Configuration
+2. Install the required packages using the `requirements.txt` file:
 
-Before using PocketGroq, you need to set up your Groq API key. There are two ways to do this:
+```bash
+pip install -r requirements.txt
+```
 
-1. Environment Variable:
-   Set the `GROQ_API_KEY` environment variable:
+This will install the following dependencies:
+- groq>=0.8.0
+- python-dotenv>=0.19.1
+- pytest>=7.3.1 (for development)
+- pytest-asyncio>=0.21.0 (for development)
+- requests>=2.32.3
 
-   ```bash
-   export GROQ_API_KEY=your_api_key_here
-   ```
-
-2. .env File:
-   Create a `.env` file in your project root and add your API key:
-
-   ```
-   GROQ_API_KEY=your_api_key_here
-   ```
-
-   PocketGroq will automatically load the API key from the .env file.
+Note: If you're not planning to contribute to the development of PocketGroq, you can omit the pytest packages by creating a new requirements file without those lines.
 
 ## Basic Usage
 
-Here's a simple example of how to use PocketGroq for text generation:
+### Initializing GroqProvider
 
 ```python
 from pocketgroq import GroqProvider
 
 # Initialize the GroqProvider
 groq = GroqProvider()
+```
 
-# Generate text
-response = groq.generate("Tell me a joke about programming")
+### Simple Text Generation
+
+```python
+response = groq.generate("Tell me a joke about programming.")
 print(response)
 ```
 
-## Advanced Features
+### Tool Usage Example: String Reverser
 
-### JSON Mode
-
-You can use JSON mode to ensure the model's output is in a valid JSON format:
+PocketGroq allows you to define tools (functions) that the model can use during the conversation:
 
 ```python
-from pocketgroq import GroqProvider
+from typing import Dict
 
-groq = GroqProvider()
+def reverse_string(input_string: str) -> Dict[str, str]:
+    """ Reverse the given string """
+    return {"reversed_string": input_string[::-1]}
 
-prompt = "Generate a JSON object with name, age, and occupation fields"
-response = groq.generate(prompt, json_mode=True)
-print(response)
-```
-
-### Streaming
-
-For long responses, you can use streaming to get partial results as they're generated:
-
-```python
-from pocketgroq import GroqProvider
-
-groq = GroqProvider()
-
-prompt = "Write a short story about a time traveler"
-for chunk in groq.generate(prompt, stream=True):
-    print(chunk, end="", flush=True)
-```
-
-### Tool Use
-
-PocketGroq supports tool use, allowing the model to call predefined functions:
-
-```python
-from pocketgroq import GroqProvider
-
-def get_weather(location: str):
-    # Simulated weather function
-    return {"temperature": 20, "condition": "sunny"}
-
-groq = GroqProvider()
-
+# Define the tool
 tools = [
     {
         "type": "function",
         "function": {
-            "name": "get_weather",
-            "description": "Get the current weather for a location",
+            "name": "reverse_string",
+            "description": "Reverse the given string",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "location": {
+                    "input_string": {
                         "type": "string",
-                        "description": "The city and state, e.g. San Francisco, CA",
+                        "description": "The string to be reversed, e.g., 'hello'",
                     }
                 },
-                "required": ["location"],
+                "required": ["input_string"],
             },
-            "implementation": get_weather
+            "implementation": reverse_string
         }
     }
 ]
 
-response = groq.generate("What's the weather in San Francisco?", tools=tools)
-print(response)
+# Generate a response using the tool
+response = groq.generate("Please reverse the string 'hello world'", tools=tools)
+print("Response:", response)
 ```
 
-### Asynchronous Operations
+### Retrieving Available Models
 
-PocketGroq supports asynchronous operations for both regular and streaming responses:
+You can retrieve all available models:
+
+```python
+models = groq.get_available_models()
+print("Available Models:", models)
+```
+
+### Overriding the Default Model
+
+Override the default model by passing the `model` parameter to the `generate` method:
+
+```python
+# Use a specific model (ensure it's available in your Groq account)
+selected_model = 'llama3-groq-8b-8192-tool-use-preview'
+response = groq.generate("Please reverse the string 'hello world'", model=selected_model, tools=tools)
+print("Response with Selected Model:", response)
+```
+
+## Advanced Usage
+
+### Streaming Responses
+
+For long responses, you can use streaming:
+
+```python
+for chunk in groq.generate("Write a short story about AI", stream=True):
+    print(chunk, end='', flush=True)
+```
+
+### Asynchronous Generation
+
+For asynchronous operations:
 
 ```python
 import asyncio
-from pocketgroq import GroqProvider
-
-groq = GroqProvider()
-
-async def async_generate():
-    response = await groq.generate("Explain quantum computing", async_mode=True)
-    print(response)
-
-async def async_stream():
-    async for chunk in groq.generate("Tell me a story about AI", async_mode=True, stream=True):
-        print(chunk, end="", flush=True)
 
 async def main():
-    await async_generate()
-    print("\n---\n")
-    await async_stream()
+    response = await groq.generate("Explain quantum computing", async_mode=True)
+    print(response)
 
 asyncio.run(main())
 ```
 
-## Error Handling
+### JSON Mode
 
-PocketGroq provides custom exceptions for better error handling:
+To get responses in JSON format:
 
 ```python
-from pocketgroq import GroqProvider
-from pocketgroq.exceptions import GroqAPIKeyMissingError, GroqAPIError
-
-try:
-    groq = GroqProvider()
-    response = groq.generate("Tell me a joke")
-    print(response)
-except GroqAPIKeyMissingError:
-    print("Please set your GROQ_API_KEY environment variable or in the .env file")
-except GroqAPIError as e:
-    print(f"An error occurred while calling the Groq API: {str(e)}")
+response = groq.generate("List 3 programming languages and their main uses", json_mode=True)
+print(response)
 ```
 
-## Best Practices
+## Configuration
 
-1. Always handle exceptions to gracefully manage API errors and missing keys.
-2. Use streaming for long-form content generation to improve user experience.
-3. Leverage tool use for complex tasks that require external data or computations.
-4. Use JSON mode when you need structured output from the model.
-5. For high-throughput applications, consider using asynchronous operations.
+PocketGroq uses environment variables for configuration. Set `GROQ_API_KEY` in your environment or in a `.env` file in your project root.
+
+## Error Handling
+
+PocketGroq raises custom exceptions:
+
+- `GroqAPIKeyMissingError`: Raised when the Groq API key is missing.
+- `GroqAPIError`: Raised when there's an error with the Groq API.
+
+Handle these exceptions in your code for robust error management.
 
 ## Contributing
 
-We welcome contributions to PocketGroq! Please see our [CONTRIBUTING.md](CONTRIBUTING.md) file for details on how to get started.
+Feel free to open issues or submit pull requests on the [GitHub repository](https://github.com/jgravelle/pocketgroq) if you encounter any problems or have feature suggestions.
 
 ## License
 
-PocketGroq is released under the MIT License. See the [LICENSE](LICENSE) file for more details.
+This project is licensed under the MIT License.
