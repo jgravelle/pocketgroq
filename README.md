@@ -2,9 +2,11 @@
 
 PocketGroq provides a simpler interface to interact with the Groq API, aiding in rapid development by abstracting complex API calls into simple functions.
 
-## Installation
+## Installation and Upgrading
 
-### Option 1: Install from PyPI (Recommended)
+### Installing PocketGroq
+
+#### Option 1: Install from PyPI (Recommended)
 
 The easiest way to install PocketGroq is directly from PyPI using pip:
 
@@ -14,7 +16,7 @@ pip install pocketgroq
 
 This will install the latest stable version of PocketGroq and its dependencies.
 
-### Option 2: Install from Source
+#### Option 2: Install from Source
 
 If you want to use the latest development version or contribute to PocketGroq, you can install it from the source:
 
@@ -32,6 +34,30 @@ pip install -e .
 ```
 
 This will install PocketGroq in editable mode, allowing you to make changes to the source code and immediately see the effects.
+
+### Upgrading PocketGroq
+
+To upgrade an existing installation of PocketGroq to the latest version, use the following command:
+
+```bash
+pip install --upgrade pocketgroq
+```
+
+This will fetch and install the most recent version of PocketGroq from PyPI, along with any updated dependencies.
+
+To upgrade to a specific version, you can specify the version number:
+
+```bash
+pip install --upgrade pocketgroq==0.2.0
+```
+
+After upgrading, it's a good idea to verify the installed version:
+
+```bash
+pip show pocketgroq
+```
+
+This will display information about the installed PocketGroq package, including its version number.
 
 ## Basic Usage
 
