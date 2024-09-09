@@ -1,6 +1,5 @@
 import os
 import json
-import requests
 from typing import Dict, Any, List, Union, AsyncIterator
 import asyncio
 
@@ -25,28 +24,26 @@ class GroqProvider:
         self.api_key = api_key or get_api_key()
         if not self.api_key:
             raise GroqAPIKeyMissingError("Groq API key is not provided")
-        if Groq is None or AsyncGroq is None:
-            raise ImportError("Groq and AsyncGroq classes could not be imported. Please check your groq package installation.")
         self.client = Groq(api_key=self.api_key)
         self.async_client = AsyncGroq(api_key=self.api_key)
         self.tool_use_models = [
             "llama3-groq-70b-8192-tool-use-preview",
             "llama3-groq-8b-8192-tool-use-preview"
         ]
-        self.tool_implementations = {}
+        self.available_models = self.get_available_models()
+        self.validate_and_update_tool_use_models()
 
     def get_available_models(self) -> Dict[str, Dict[str, Any]]:
-        url = "https://api.groq.com/openai/v1/models"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-        response = requests.get(url, headers=headers)
-        if response.status_code == 200:
-            models = response.json().get("data", [])
-            return {model["id"]: model for model in models}
-        else:
-            raise GroqAPIError(f"Error fetching available models: {response.text}")
+        try:
+            response = self.client.models.list()
+            return {model.id: {
+                "context_window": model.context_window,
+                "owned_by": model.owned_by,
+                "created": model.created,
+                "active": model.active
+            } for model in response.data}
+        except Exception as e:
+            raise GroqAPIError(f"Error fetching available models: {str(e)}")
 
     def generate(self, prompt: str, model: str = None, **kwargs) -> Union[str, AsyncIterator[str]]:
         messages = [{"role": "user", "content": prompt}]
@@ -66,6 +63,12 @@ class GroqProvider:
             kwargs["tools"] = tools
             print("Serialized Tools:", kwargs["tools"])
         return self._create_completion(messages, model=model, **kwargs)
+    
+    def validate_and_update_tool_use_models(self):
+        valid_tool_use_models = [model for model in self.tool_use_models if model in self.available_models]
+        if not valid_tool_use_models:
+            raise GroqAPIError("No valid tool use models found in the available models list")
+        self.tool_use_models = valid_tool_use_models
 
     def _create_completion(self, messages: List[Dict[str, str]], model: str = None, **kwargs) -> Union[str, AsyncIterator[str]]:
         completion_kwargs = {
@@ -92,11 +95,12 @@ class GroqProvider:
             return self._sync_create_completion(**completion_kwargs)
 
     def _select_model(self, requested_model: str, tools: List[Dict[str, Any]]) -> str:
-        if tools and not requested_model:
-            return self.tool_use_models[0]  # Default to the 70B model for tool use
-        elif tools and requested_model not in self.tool_use_models:
-            print(f"Warning: {requested_model} is not optimized for tool use. Switching to {self.tool_use_models[0]}.")
-            return self.tool_use_models[0]
+        if tools:
+            if not requested_model or requested_model not in self.tool_use_models:
+                selected_model = self.tool_use_models[0]
+                if requested_model:
+                    print(f"Warning: {requested_model} is not optimized for tool use. Switching to {selected_model}.")
+                return selected_model
         return requested_model or os.environ.get('GROQ_MODEL', 'llama3-8b-8192')
 
     def _sync_create_completion(self, **kwargs) -> Union[str, AsyncIterator[str]]:
