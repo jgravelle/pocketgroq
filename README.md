@@ -133,20 +133,27 @@ response = groq.generate("List 3 programming languages and their main uses", jso
 print(response)
 ```
 
-### Image Handling
+## Image Handling
 
-PocketGroq supports image analysis using compatible models:
+PocketGroq now supports image analysis using Groq's vision model. You can use this feature by providing an `image_path` parameter to the `generate` method:
 
 ```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+
+# Using an image URL
 image_url = "https://example.com/image.jpg"
-response = groq.generate("Describe this image in detail", image_path=image_url)
+response = groq.generate("What's in this image?", image_path=image_url)
 print(response)
 
-# For local images
-local_image_path = "path/to/local/image.jpg"
-response = groq.generate("What objects do you see in this image?", image_path=local_image_path)
+# Using a local image file
+local_image_path = "/path/to/local/image.jpg"
+response = groq.generate("Describe the contents of this image", image_path=local_image_path)
 print(response)
 ```
+
+When an image path is provided, PocketGroq automatically selects the appropriate vision model for processing the request.
 
 ## Use Case Scenarios
 

@@ -1,5 +1,6 @@
 groq==0.8.0
 python-dotenv==0.19.1
+requests>=2.32.3
 
 [dev]
 pytest==7.3.1

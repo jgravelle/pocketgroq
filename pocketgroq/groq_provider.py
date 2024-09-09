@@ -1,7 +1,9 @@
 import os
 import json
+import base64
 from typing import Dict, Any, List, Union, AsyncIterator
 import asyncio
+import requests
 
 try:
     from groq import Groq, AsyncGroq
@@ -30,6 +32,7 @@ class GroqProvider:
             "llama3-groq-70b-8192-tool-use-preview",
             "llama3-groq-8b-8192-tool-use-preview"
         ]
+        self.vision_model = "llava-v1.5-7b-4096-preview"
         self.available_models = self.get_available_models()
         self.validate_and_update_tool_use_models()
 
@@ -45,10 +48,9 @@ class GroqProvider:
         except Exception as e:
             raise GroqAPIError(f"Error fetching available models: {str(e)}")
 
-    def generate(self, prompt: str, model: str = None, **kwargs) -> Union[str, AsyncIterator[str]]:
-        messages = [{"role": "user", "content": prompt}]
+    def generate(self, prompt: str, model: str = None, image_path: str = None, **kwargs) -> Union[str, AsyncIterator[str]]:
+        messages = self._prepare_messages(prompt, image_path)
         if "tools" in kwargs:
-            # Extract only serializable parts of tools and store implementations separately
             tools = [
                 {
                     "type": tool["type"],
@@ -58,21 +60,42 @@ class GroqProvider:
                         "parameters": tool["function"]["parameters"]
                     }
                 }
-            for tool in kwargs["tools"]]
+                for tool in kwargs["tools"]
+            ]
             self.tool_implementations = {tool["function"]["name"]: tool["function"]["implementation"] for tool in kwargs["tools"]}
             kwargs["tools"] = tools
             print("Serialized Tools:", kwargs["tools"])
         return self._create_completion(messages, model=model, **kwargs)
     
+    def _prepare_messages(self, prompt: str, image_path: str = None) -> List[Dict[str, Any]]:
+        content = [{"type": "text", "text": prompt}]
+        if image_path:
+            if image_path.startswith(('http://', 'https://')):
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": image_path}
+                })
+            else:
+                base64_image = self._encode_image(image_path)
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
+                })
+        return [{"role": "user", "content": content}]
+
+    def _encode_image(self, image_path: str) -> str:
+        with open(image_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode('utf-8')
+
     def validate_and_update_tool_use_models(self):
         valid_tool_use_models = [model for model in self.tool_use_models if model in self.available_models]
         if not valid_tool_use_models:
             raise GroqAPIError("No valid tool use models found in the available models list")
         self.tool_use_models = valid_tool_use_models
 
-    def _create_completion(self, messages: List[Dict[str, str]], model: str = None, **kwargs) -> Union[str, AsyncIterator[str]]:
+    def _create_completion(self, messages: List[Dict[str, Any]], model: str = None, **kwargs) -> Union[str, AsyncIterator[str]]:
         completion_kwargs = {
-            "model": self._select_model(model, kwargs.get("tools")),
+            "model": self._select_model(model, kwargs.get("tools"), messages),
             "messages": messages,
             "temperature": kwargs.get("temperature", 0.5),
             "max_tokens": kwargs.get("max_tokens", 1024),
@@ -94,7 +117,9 @@ class GroqProvider:
         else:
             return self._sync_create_completion(**completion_kwargs)
 
-    def _select_model(self, requested_model: str, tools: List[Dict[str, Any]]) -> str:
+    def _select_model(self, requested_model: str, tools: List[Dict[str, Any]], messages: List[Dict[str, Any]]) -> str:
+        if any(isinstance(content, dict) and content.get("type") == "image_url" for message in messages for content in message["content"]):
+            return self.vision_model
         if tools:
             if not requested_model or requested_model not in self.tool_use_models:
                 selected_model = self.tool_use_models[0]

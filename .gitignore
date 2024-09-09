@@ -50,9 +50,6 @@ venv.bak/
 .vscode/
 .idea/
 
-# Project-specific
-pocketgroq.md
-
 # OS-specific
 .DS_Store
 Thumbs.db
