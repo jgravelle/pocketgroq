@@ -157,7 +157,7 @@ class GroqProvider:
 
     def _process_tool_calls(self, response) -> str:
         message = response.choices[0].message
-        print("Processing Tool Calls. Message:", message)
+        # print("Processing Tool Calls. Message:", message)
         if hasattr(message, 'tool_calls') and message.tool_calls:
             tool_results = self._execute_tool_calls(message.tool_calls)
             response_content = f"Tool results: {tool_results[0]['content']}" if tool_results else message.content
@@ -167,7 +167,7 @@ class GroqProvider:
 
     async def _async_process_tool_calls(self, response) -> str:
         message = response.choices[0].message
-        print("Processing Async Tool Calls. Message:", message)
+        # print("Processing Async Tool Calls. Message:", message)
         if hasattr(message, 'tool_calls') and message.tool_calls:
             tool_results = await self._async_execute_tool_calls(message.tool_calls)
             response_content = f"Tool results: {tool_results[0]['content']}" if tool_results else message.content
