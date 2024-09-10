@@ -131,7 +131,7 @@ class GroqProvider:
     def _sync_create_completion(self, **kwargs) -> Union[str, AsyncIterator[str]]:
         try:
             response = self.client.chat.completions.create(**kwargs)
-            print("Initial Response:", response)
+            # print("Initial Response:", response)
             if kwargs.get("stream", False):
                 return (chunk.choices[0].delta.content for chunk in response)
             else:
