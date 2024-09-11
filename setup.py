@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pocketgroq",
-    version="0.2.4",  # Increment the version number
+    version="0.2.5",  # Increment the version number
     author="PocketGroq Team",
     author_email="pocketgroq@example.com",
     description="A library for easy integration with Groq API, including image handling",
