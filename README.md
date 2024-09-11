@@ -2,6 +2,8 @@
 
 PocketGroq provides a simpler interface to interact with the Groq API, aiding in rapid development by abstracting complex API calls into simple functions. It now includes a powerful WebTool for web searches and content retrieval, enhancing its capabilities for information gathering and processing.
 
+![image](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
+
 ## Installation and Upgrading
 
 ### Installing PocketGroq
@@ -441,3 +443,5 @@ Feel free to open issues or submit pull requests on the [GitHub repository](http
 ## License
 
 This project is licensed under the MIT License. Mention J. Gravelle in your code and/or docs. He's kinda full of himself.
+
+![image](https://github.com/user-attachments/assets/73c812cd-685e-4969-9497-639ae9312d6c)
