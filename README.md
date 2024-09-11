@@ -1,6 +1,6 @@
 # PocketGroq
 
-PocketGroq provides a simpler interface to interact with the Groq API, aiding in rapid development by abstracting complex API calls into simple functions.
+PocketGroq provides a simpler interface to interact with the Groq API, aiding in rapid development by abstracting complex API calls into simple functions. It now includes a powerful WebTool for web searches and content retrieval, enhancing its capabilities for information gathering and processing.
 
 ## Installation and Upgrading
 
@@ -18,7 +18,7 @@ This will install the latest stable version of PocketGroq and its dependencies.
 
 #### Option 2: Install from Source
 
-If you want to use the latest development version or contribute to PocketGro, you can install it from the source:
+If you want to use the latest development version or contribute to PocketGroq, you can install it from the source:
 
 1. Clone the repository:
 
@@ -33,22 +33,22 @@ cd pocketgroq
 pip install -e .
 ```
 
-This will install PocketGroq in editable mode, allowing you make changes to the source code and immediately see the effects.
+This will install PocketGroq in editable mode, allowing you to make changes to the source code and immediately see the effects.
 
 ### Upgrading PocketGroq
 
-To upgrade an existing installation ofGroq to the latest version, use the following command:
+To upgrade an existing installation of PocketGroq to the latest version, use the following command:
 
 ```bash
 pip install --upgrade pocketgroq
 ```
 
-This will fetch and install the recent version of PocketGroq from PyPI, along with any updated dependencies.
+This will fetch and install the most recent version of PocketGroq from PyPI, along with any updated dependencies.
 
 To upgrade to a specific version, you can specify the version number:
 
 ```bash
-pip install --upgrade pocketgroq==0.2.0
+pip install --upgrade pocketgroq==0.2.4
 ```
 
 After upgrading, it's a good idea to verify the installed version:
@@ -61,19 +61,59 @@ This will display information about the installed PocketGroq package, including 
 
 ## Basic Usage
 
-### Initializing GroProvider
+### Initializing GroqProvider and WebTool
 
 ```python
 from pocketgroq import GroqProvider
+from pocketgroq.web_tool import WebTool
 
 # Initialize the GroqProvider
 groq = GroqProvider()
+
+# Initialize the WebTool
+web_tool = WebTool(num_results=5, max_tokens=4096)
+```
+
+### Performing Web Searches
+
+```python
+query = "Latest developments in AI"
+search_results = web_tool.search(query)
+
+for result in search_results:
+    print(f"Title: {result['title']}")
+    print(f"URL: {result['url']}")
+    print(f"Description: {result['description']}")
+    print("---")
+```
+
+### Retrieving Web Content
+
+```python
+url = "https://example.com/article"
+content = web_tool.get_web_content(url)
+print(content[:500])  # Print first 500 characters
+```
+
+### Combining Web Search with Language Model
+
+```python
+query = "Explain the latest breakthroughs in quantum computing"
+search_results = web_tool.search(query)
+
+# Prepare context from search results
+context = "\n".join([f"{r['title']}: {r['description']}" for r in search_results])
+
+# Generate response using the context
+prompt = f"Based on the following information:\n\n{context}\n\nProvide a concise summary of the latest breakthroughs in quantum computing."
+response = groq.generate(prompt, max_tokens=4096, model="llama3-70b-8192", temperature=0.0)
+print(response)
 ```
 
 ### Performing Basic Chat Completion
 
 ```python
-response =q.generate(
+response = groq.generate(
     prompt="Explain the importance of fast language models",
     model="llama3-8b-8192",
     temperature=0.5,
@@ -89,7 +129,7 @@ print(response)
 
 ```python
 stream = groq.generate(
-    prompt=" the importance of fast language models",
+    prompt="Explain the importance of fast language models",
     model="llama3-8b-8192",
     temperature=0.5,
     max_tokens=1024,
@@ -114,9 +154,9 @@ print("Response with Selected Model:", response)
 
 ```python
 response = groq.generate(
-    prompt="Count to . Your response must begin with \"1, \". Example: 1, 2, 3, ...",
+    prompt="Count to 10. Your response must begin with \"1, \". Example: 1, 2, 3, ...",
     model="llama3-8b-8192",
-    temperature=0.,
+    temperature=0.5,
     max_tokens=1024,
     top_p=1,
     stop=", 6",
@@ -133,9 +173,10 @@ import asyncio
 async def main():
     response = await groq.generate(
         prompt="Explain the theory of relativity",
-       ="llama3-8b-8192",
+        model="llama3-8b-8192",
         temperature=0.5,
-        max_tokens=1024        top_p=1,
+        max_tokens=1024,
+        top_p=1,
         stop=None,
         async_mode=True
     )
@@ -153,14 +194,15 @@ async def main():
     stream = await groq.generate(
         prompt="Explain the importance of fast language models",
         model="llama3-8b-8192",
-        temperature=0.5        max_tokens=1024,
+        temperature=0.5,
+        max_tokens=1024,
         top_p=1,
         stop=None,
         stream=True,
         async_mode=True
     )
 
-    async for chunk stream:
+    async for chunk in stream:
         print(chunk, end="")
 
 asyncio.run(main())
@@ -168,7 +210,7 @@ asyncio.run(main())
 
 ### JSON Mode
 
-```
+```python
 from typing import List, Optional
 from pydantic import BaseModel
 from pocketgroq import GroqProvider
@@ -180,13 +222,13 @@ class Ingredient(BaseModel):
 
 class Recipe(BaseModel):
     recipe_name: str
-    ingredients: ListIngredient]
+    ingredients: List[Ingredient]
     directions: List[str]
 
 def get_recipe(recipe_name: str) -> Recipe:
     response = groq.generate(
         prompt=f"Fetch a recipe for {recipe_name}",
-        model="ll3-8b-8192",
+        model="llama3-8b-8192",
         temperature=0,
         stream=False,
         json_mode=True
@@ -208,10 +250,10 @@ print_recipe(recipe)
 
 ### Tool Usage
 
-PocketGroq allows to define tools (functions) that the model can use during the conversation:
+PocketGroq allows you to define tools (functions) that the model can use during the conversation:
 
 ```python
-def reverse_string(input_string: str) ->:
+def reverse_string(input_string: str) -> dict:
     return {"reversed_string": input_string[::-1]}
 
 tools = [
@@ -228,8 +270,8 @@ tools = [
                         "description": "The string to be reversed",
                     }
                 },
-                "required":input_string"],
- },
+                "required": ["input_string"],
+            },
             "implementation": reverse_string
         }
     }
@@ -255,7 +297,7 @@ groq = GroqProvider()
 response_url = groq.generate(
     prompt="What's in this image?",
     model="llava-v1.5-7b-4096-preview",
-    image_urlhttps://example.com/image.png"
+    image_url="https://example.com/image.png"
 )
 print(response_url)
 
@@ -264,11 +306,46 @@ image_path = "path_to_your_image.jpg"
 base64_image = encode_image(image_path)
 
 response_base64 = groq.generate(
-    prompt=" in this image?",
+    prompt="What's in this image?",
     model="llava-v1.5-7b-4096-preview",
     image_url=f"data:image/jpeg;base64,{base64_image}"
 )
-print(response_base64```
+print(response_base64)
+```
+
+## WebTool Functionality
+
+The WebTool provides two main functions:
+
+1. `search(query: str, num_results: int = 10) -> List[Dict[str, Any]]`: Performs a web search and returns a list of search results.
+2. `get_web_content(url: str) -> str`: Retrieves the content of a web page.
+
+### Example: Advanced Web Search and Content Analysis
+
+```python
+from pocketgroq import GroqProvider
+from pocketgroq.web_tool import WebTool
+
+groq = GroqProvider()
+web_tool = WebTool()
+
+# Perform a web search
+query = "Recent advancements in renewable energy"
+search_results = web_tool.search(query, num_results=3)
+
+# Analyze each search result
+for result in search_results:
+    print(f"Analyzing: {result['title']}")
+    content = web_tool.get_web_content(result['url'])
+    
+    analysis_prompt = f"Analyze the following content about renewable energy and provide key insights:\n\n{content[:4000]}"
+    analysis = groq.generate(analysis_prompt, max_tokens=1000)
+    
+    print(f"Analysis: {analysis}")
+    print("---")
+```
+
+This example demonstrates how to use the WebTool to perform a search, retrieve content from each search result, and then use the GroqProvider to analyze the content.
 
 ## Use Case Scenarios
 
@@ -308,12 +385,12 @@ analysis = groq.generate(f"Analyze this sales and expenses data and provide insi
 print(analysis)
 ```
 
-4. **Image Analysis: Utilize PocketGroq's image handling capabilities for various visual tasks.
+4. **Image Analysis**: Utilize PocketGroq's image handling capabilities for various visual tasks.
 
 ```python
 image_url = "https://example.com/chart.jpg"
-chart_analysis = groq.generateAnalyze this chart image and provide key insights", image_path=image_url)
-print_analysis)
+chart_analysis = groq.generate("Analyze this chart image and provide key insights", image_path=image_url)
+print(chart_analysis)
 ```
 
 5. **Automated Customer Support**: Implement PocketGroq in a chatbot for handling customer inquiries.
@@ -324,18 +401,38 @@ response = groq.generate(f"Provide a step-by-step guide to answer this customer 
 print(response)
 ```
 
+6. **Web Research Assistant**: Utilize PocketGroq's WebTool for automated web research and summarization.
+
+```python
+from pocketgroq import GroqProvider
+from pocketgroq.web_tool import WebTool
+
+groq = GroqProvider()
+web_tool = WebTool()
+
+research_topic = "Impact of artificial intelligence on job markets"
+search_results = web_tool.search(research_topic, num_results=5)
+
+research_summary = groq.generate(
+    f"Based on the following search results about '{research_topic}', provide a comprehensive summary:\n\n" +
+    "\n".join([f"- {r['title']}: {r['description']}" for r in search_results])
+)
+
+print(research_summary)
+```
+
 ## Configuration
 
-PocketGroq uses environment variables for configuration. `GROQ_API_KEY` in your environment or in a `.env` file in your project root.
+PocketGroq uses environment variables for configuration. Set `GROQ_API_KEY` in your environment or in a `.env` file in your project root.
 
 ## Error Handling
 
-PocketGroq raises custom:
+PocketGroq raises custom exceptions:
 
 - `GroqAPIKeyMissingError`: Raised when the Groq API key is missing.
 - `GroqAPIError`: Raised when there's an error with the Groq API.
 
-Handle exceptions in your code for robust error management.
+Handle these exceptions in your code for robust error management.
 
 ## Contributing
 
@@ -343,4 +440,4 @@ Feel free to open issues or submit pull requests on the [GitHub repository](http
 
 ## License
 
-This project is licensed under the MIT License. Mention J. Gravelle in your code and/or docs. He's kinda full of himself...
+This project is licensed under the MIT License. Mention J. Gravelle in your code and/or docs. He's kinda full of himself.

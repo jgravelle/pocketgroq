@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: pocketgroq
-Version: 0.2.0
+Version: 0.2.3
 Summary: A library for easy integration with Groq API, including image handling
 Home-page: https://github.com/jgravelle/pocketgroq
 Author: PocketGroq Team
@@ -18,20 +18,17 @@ Classifier: Programming Language :: Python :: 3.10
 Classifier: Programming Language :: Python :: 3.11
 Requires-Python: >=3.7
 Description-Content-Type: text/markdown
-Requires-Dist: groq==0.8.0
-Requires-Dist: python-dotenv==0.19.1
-Requires-Dist: requests>=2.32.3
 Provides-Extra: dev
-Requires-Dist: pytest==7.3.1; extra == "dev"
-Requires-Dist: pytest-asyncio==0.21.0; extra == "dev"
 
 # PocketGroq
 
 PocketGroq provides a simpler interface to interact with the Groq API, aiding in rapid development by abstracting complex API calls into simple functions.
 
-## Installation
+## Installation and Upgrading
 
-### Option 1: Install from PyPI (Recommended)
+### Installing PocketGroq
+
+#### Option 1: Install from PyPI (Recommended)
 
 The easiest way to install PocketGroq is directly from PyPI using pip:
 
@@ -41,9 +38,9 @@ pip install pocketgroq
 
 This will install the latest stable version of PocketGroq and its dependencies.
 
-### Option 2: Install from Source
+#### Option 2: Install from Source
 
-If you want to use the latest development version or contribute to PocketGroq, you can install it from the source:
+If you want to use the latest development version or contribute to PocketGro, you can install it from the source:
 
 1. Clone the repository:
 
@@ -58,11 +55,35 @@ cd pocketgroq
 pip install -e .
 ```
 
-This will install PocketGroq in editable mode, allowing you to make changes to the source code and immediately see the effects.
+This will install PocketGroq in editable mode, allowing you make changes to the source code and immediately see the effects.
+
+### Upgrading PocketGroq
+
+To upgrade an existing installation ofGroq to the latest version, use the following command:
+
+```bash
+pip install --upgrade pocketgroq
+```
+
+This will fetch and install the recent version of PocketGroq from PyPI, along with any updated dependencies.
+
+To upgrade to a specific version, you can specify the version number:
+
+```bash
+pip install --upgrade pocketgroq==0.2.0
+```
+
+After upgrading, it's a good idea to verify the installed version:
+
+```bash
+pip show pocketgroq
+```
+
+This will display information about the installed PocketGroq package, including its version number.
 
 ## Basic Usage
 
-### Initializing GroqProvider
+### Initializing GroProvider
 
 ```python
 from pocketgroq import GroqProvider
@@ -71,18 +92,36 @@ from pocketgroq import GroqProvider
 groq = GroqProvider()
 ```
 
-### Simple Text Generation
+### Performing Basic Chat Completion
 
 ```python
-response = groq.generate("Tell me a joke about programming.")
+response =q.generate(
+    prompt="Explain the importance of fast language models",
+    model="llama3-8b-8192",
+    temperature=0.5,
+    max_tokens=1024,
+    top_p=1,
+    stop=None,
+    stream=False
+)
 print(response)
 ```
 
-### Retrieving Available Models
+### Streaming a Chat Completion
 
 ```python
-models = groq.get_available_models()
-print("Available Models:", models)
+stream = groq.generate(
+    prompt=" the importance of fast language models",
+    model="llama3-8b-8192",
+    temperature=0.5,
+    max_tokens=1024,
+    top_p=1,
+    stop=None,
+    stream=True
+)
+
+for chunk in stream:
+    print(chunk, end="")
 ```
 
 ### Overriding the Default Model
@@ -93,14 +132,108 @@ response = groq.generate("Explain quantum computing", model=selected_model)
 print("Response with Selected Model:", response)
 ```
 
-## Advanced Features
+### Performing a Chat Completion with a Stop Sequence
+
+```python
+response = groq.generate(
+    prompt="Count to . Your response must begin with \"1, \". Example: 1, 2, 3, ...",
+    model="llama3-8b-8192",
+    temperature=0.,
+    max_tokens=1024,
+    top_p=1,
+    stop=", 6",
+    stream=False
+)
+print(response)
+```
+
+### Asynchronous Generation
+
+```python
+import asyncio
+
+async def main():
+    response = await groq.generate(
+        prompt="Explain the theory of relativity",
+       ="llama3-8b-8192",
+        temperature=0.5,
+        max_tokens=1024        top_p=1,
+        stop=None,
+        async_mode=True
+    )
+    print(response)
+
+asyncio.run(main())
+```
+
+### Streaming an Async Chat Completion
+
+```python
+import asyncio
+
+async def main():
+    stream = await groq.generate(
+        prompt="Explain the importance of fast language models",
+        model="llama3-8b-8192",
+        temperature=0.5        max_tokens=1024,
+        top_p=1,
+        stop=None,
+        stream=True,
+        async_mode=True
+    )
+
+    async for chunk stream:
+        print(chunk, end="")
+
+asyncio.run(main())
+```
+
+### JSON Mode
+
+```
+from typing import List, Optional
+from pydantic import BaseModel
+from pocketgroq import GroqProvider
+
+class Ingredient(BaseModel):
+    name: str
+    quantity: str
+    quantity_unit: Optional[str]
+
+class Recipe(BaseModel):
+    recipe_name: str
+    ingredients: ListIngredient]
+    directions: List[str]
+
+def get_recipe(recipe_name: str) -> Recipe:
+    response = groq.generate(
+        prompt=f"Fetch a recipe for {recipe_name}",
+        model="ll3-8b-8192",
+        temperature=0,
+        stream=False,
+        json_mode=True
+    )
+    return Recipe.parse_raw(response)
+
+def print_recipe(recipe: Recipe):
+    print("Recipe:", recipe.recipe_name)
+    print("\nIngredients:")
+    for ingredient in recipe.ingredients:
+        print(f"- {ingredient.name}: {ingredient.quantity} {ingredient.quantity_unit or ''}")
+    print("\nDirections:")
+    for step, direction in enumerate(recipe.directions, start=1):
+        print(f"{step}. {direction}")
+
+recipe = get_recipe("apple pie")
+print_recipe(recipe)
+```
 
 ### Tool Usage
 
-PocketGroq allows you to define tools (functions) that the model can use during the conversation:
+PocketGroq allows to define tools (functions) that the model can use during the conversation:
 
 ```python
-def reverse_string(input_string: str) -> dict:
+def reverse_string(input_string: str) ->:
     return {"reversed_string": input_string[::-1]}
 
 tools = [
@@ -117,8 +250,8 @@ tools = [
                         "description": "The string to be reversed",
                     }
                 },
-                "required": ["input_string"],
-            },
+                "required":input_string"],
+ },
             "implementation": reverse_string
         }
     }
@@ -128,52 +261,36 @@ response = groq.generate("Please reverse the string 'hello world'", tools=tools)
 print("Response:", response)
 ```
 
-### Streaming Responses
-
-For long responses, you can use streaming:
+### Vision (llava-v1.5-7b-4096-preview model only)
 
 ```python
-for chunk in groq.generate("Write a short story about AI", stream=True):
-    print(chunk, end='', flush=True)
-```
+from pocketgroq import GroqProvider
+import base64
 
-### Asynchronous Generation
+def encode_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode('utf-8')
 
-For asynchronous operations:
+groq = GroqProvider()
 
-```python
-import asyncio
+# Via URL
+response_url = groq.generate(
+    prompt="What's in this image?",
+    model="llava-v1.5-7b-4096-preview",
+    image_urlhttps://example.com/image.png"
+)
+print(response_url)
 
-async def main():
-    response = await groq.generate("Explain the theory of relativity", async_mode=True)
-    print(response)
+# Via passed-in image
+image_path = "path_to_your_image.jpg"
+base64_image = encode_image(image_path)
 
-asyncio.run(main())
-```
-
-### JSON Mode
-
-To get responses in JSON format:
-
-```python
-response = groq.generate("List 3 programming languages and their main uses", json_mode=True)
-print(response)
-```
-
-### Image Handling
-
-PocketGroq supports image analysis using compatible models:
-
-```python
-image_url = "https://example.com/image.jpg"
-response = groq.generate("Describe this image in detail", image_path=image_url)
-print(response)
-
-# For local images
-local_image_path = "path/to/local/image.jpg"
-response = groq.generate("What objects do you see in this image?", image_path=local_image_path)
-print(response)
-```
+response_base64 = groq.generate(
+    prompt=" in this image?",
+    model="llava-v1.5-7b-4096-preview",
+    image_url=f"data:image/jpeg;base64,{base64_image}"
+)
+print(response_base64```
 
 ## Use Case Scenarios
 
@@ -213,12 +330,12 @@ analysis = groq.generate(f"Analyze this sales and expenses data and provide insi
 print(analysis)
 ```
 
-4. **Image Analysis**: Utilize PocketGroq's image handling capabilities for various visual tasks.
+4. **Image Analysis: Utilize PocketGroq's image handling capabilities for various visual tasks.
 
 ```python
 image_url = "https://example.com/chart.jpg"
-chart_analysis = groq.generate("Analyze this chart image and provide key insights", image_path=image_url)
-print(chart_analysis)
+chart_analysis = groq.generateAnalyze this chart image and provide key insights", image_path=image_url)
+print_analysis)
 ```
 
 5. **Automated Customer Support**: Implement PocketGroq in a chatbot for handling customer inquiries.
@@ -231,16 +348,16 @@ print(response)
 
 ## Configuration
 
-PocketGroq uses environment variables for configuration. Set `GROQ_API_KEY` in your environment or in a `.env` file in your project root.
+PocketGroq uses environment variables for configuration. `GROQ_API_KEY` in your environment or in a `.env` file in your project root.
 
 ## Error Handling
 
-PocketGroq raises custom exceptions:
+PocketGroq raises custom:
 
 - `GroqAPIKeyMissingError`: Raised when the Groq API key is missing.
 - `GroqAPIError`: Raised when there's an error with the Groq API.
 
-Handle these exceptions in your code for robust error management.
+Handle exceptions in your code for robust error management.
 
 ## Contributing
 
@@ -248,4 +365,4 @@ Feel free to open issues or submit pull requests on the [GitHub repository](http
 
 ## License
 
-This project is licensed under the MIT License.  Mention J. Gravelle in your code and/or docs.  He's kinda full of himself...
+This project is licensed under the MIT License. Mention J. Gravelle in your code and/or docs. He's kinda full of himself...

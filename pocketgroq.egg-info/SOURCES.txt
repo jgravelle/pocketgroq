@@ -5,6 +5,7 @@ pocketgroq/config.py
 pocketgroq/exceptions.py
 pocketgroq/groq_provider.py
 pocketgroq/utils.py
+pocketgroq/web_tool.py
 pocketgroq.egg-info/PKG-INFO
 pocketgroq.egg-info/SOURCES.txt
 pocketgroq.egg-info/dependency_links.txt
