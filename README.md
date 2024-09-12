@@ -50,7 +50,7 @@ This will fetch and install the most recent version of PocketGroq from PyPI, alo
 To upgrade to a specific version, you can specify the version number:
 
 ```bash
-pip install --upgrade pocketgroq==0.2.4
+pip install --upgrade pocketgroq==0.2.6
 ```
 
 After upgrading, it's a good idea to verify the installed version:

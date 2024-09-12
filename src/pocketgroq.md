@@ -8,7 +8,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pocketgroq",
-    version="0.2.5",  # Increment the version number
+    version="0.2.6",  # Increment the version number
     author="PocketGroq Team",
     author_email="pocketgroq@example.com",
     description="A library for easy integration with Groq API, including image handling",
@@ -508,7 +508,14 @@ def get_env_variable(var_name: str, default: str = None) -> str:
 import requests
 from bs4 import BeautifulSoup
 from typing import Dict, Any, List
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote_plus
+import os
+
+DEBUG = False  # Set to True for debugging
+
+def log_debug(message):
+    if DEBUG:
+        print(f"DEBUG: {message}")
 
 class WebTool:
     def __init__(self, num_results: int = 10, max_tokens: int = 4096):
@@ -516,53 +523,68 @@ class WebTool:
         self.max_tokens = max_tokens
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,/;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate, br',
             'Referer': 'https://www.google.com/',
             'DNT': '1',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
-            'Cookie': ''  # This empty string tells the server we accept cookies
         }
 
     def search(self, query: str) -> List[Dict[str, Any]]:
-        """Perform a web search and return results."""
+        log_debug(f"Performing web search for: {query}")
         search_results = self._perform_web_search(query)
         filtered_results = self._filter_search_results(search_results)
         deduplicated_results = self._remove_duplicates(filtered_results)
+        log_debug(f"Found {len(deduplicated_results)} unique results")
         return deduplicated_results[:self.num_results]
 
     def _perform_web_search(self, query: str) -> List[Dict[str, Any]]:
-        search_url = f"https://www.google.com/search?q={query}&num={self.num_results * 2}"
+        encoded_query = quote_plus(query)
+        search_url = f"https://www.google.com/search?q={encoded_query}&num={self.num_results * 2}"
+        log_debug(f"Search URL: {search_url}")
         
         try:
+            log_debug("Sending GET request to Google")
             response = requests.get(search_url, headers=self.headers, timeout=10)
+            log_debug(f"Response status code: {response.status_code}")
             response.raise_for_status()
+            
+            log_debug("Parsing HTML with BeautifulSoup")
             soup = BeautifulSoup(response.text, 'html.parser')
             
+            log_debug("Searching for result divs")
             search_results = []
             for g in soup.find_all('div', class_='g'):
+                log_debug("Processing a search result div")
                 anchor = g.find('a')
                 title = g.find('h3').text if g.find('h3') else 'No title'
                 url = anchor.get('href', 'No URL') if anchor else 'No URL'
                 
+                description = ''
                 description_div = g.find('div', class_=['VwiC3b', 'yXK7lf'])
-                description = description_div.get_text(strip=True) if description_div else ''
+                if description_div:
+                    description = description_div.get_text(strip=True)
+                else:
+                    description = g.get_text(strip=True)
                 
+                log_debug(f"Found result: Title: {title[:30]}..., URL: {url[:30]}...")
                 search_results.append({
                     'title': title,
                     'description': description,
                     'url': url
                 })
             
+            log_debug(f"Successfully retrieved {len(search_results)} search results for query: {query}")
             return search_results
         except requests.RequestException as e:
-            print(f"Error performing search: {str(e)}")
+            log_debug(f"Error performing search: {str(e)}")
             return []
 
     def _filter_search_results(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        return [result for result in results if result['description'] and result['title'] != 'No title' and result['url'].startswith('https://')]
+        filtered = [result for result in results if result['description'] and result['title'] != 'No title' and result['url'].startswith('https://')]
+        log_debug(f"Filtered to {len(filtered)} results")
+        return filtered
 
     def _remove_duplicates(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen_urls = set()
@@ -571,13 +593,11 @@ class WebTool:
             if result['url'] not in seen_urls:
                 seen_urls.add(result['url'])
                 unique_results.append(result)
+        log_debug(f"Removed duplicates, left with {len(unique_results)} results")
         return unique_results
 
     def get_web_content(self, url: str) -> str:
-        """Retrieve the content of a web page."""
-        # Clean the URL
-        url = self._clean_url(url)
-        
+        log_debug(f"Fetching content from: {url}")
         try:
             response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
@@ -591,25 +611,25 @@ class WebTool:
             chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
             text = '\n'.join(chunk for chunk in chunks if chunk)
             
-            return text[:self.max_tokens]
+            content = text[:self.max_tokens]
+            log_debug(f"Retrieved {len(content)} characters of content")
+            return content
         except requests.RequestException as e:
-            print(f"Error retrieving content from {url}: {str(e)}")
+            log_debug(f"Error retrieving content from {url}: {str(e)}")
             return ""
 
-    def _clean_url(self, url: str) -> str:
-        """Clean the URL by removing any trailing parentheses and ensuring it starts with http:// or https://"""
-        url = url.rstrip(')')  # Remove trailing parenthesis if present
-        if not url.startswith(('http://', 'https://')):
-            url = 'https://' + url  # Add https:// if missing
-        return url
-
     def is_url(self, text: str) -> bool:
-        """Check if the given text is a valid URL."""
         try:
             result = urlparse(text)
             return all([result.scheme, result.netloc])
         except ValueError:
             return False
+
+    def _clean_url(self, url: str) -> str:
+        url = url.rstrip(')')  # Remove trailing parenthesis if present
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url  # Add https:// if missing
+        return url
 ```
 
 # pocketgroq\__init__.py
@@ -957,7 +977,14 @@ def get_env_variable(var_name: str, default: str = None) -> str:
 import requests
 from bs4 import BeautifulSoup
 from typing import Dict, Any, List
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote_plus
+import os
+
+DEBUG = False  # Set to True for debugging
+
+def log_debug(message):
+    if DEBUG:
+        print(f"DEBUG: {message}")
 
 class WebTool:
     def __init__(self, num_results: int = 10, max_tokens: int = 4096):
@@ -965,53 +992,68 @@ class WebTool:
         self.max_tokens = max_tokens
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,/;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate, br',
             'Referer': 'https://www.google.com/',
             'DNT': '1',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
-            'Cookie': ''  # This empty string tells the server we accept cookies
         }
 
     def search(self, query: str) -> List[Dict[str, Any]]:
-        """Perform a web search and return results."""
+        log_debug(f"Performing web search for: {query}")
         search_results = self._perform_web_search(query)
         filtered_results = self._filter_search_results(search_results)
         deduplicated_results = self._remove_duplicates(filtered_results)
+        log_debug(f"Found {len(deduplicated_results)} unique results")
         return deduplicated_results[:self.num_results]
 
     def _perform_web_search(self, query: str) -> List[Dict[str, Any]]:
-        search_url = f"https://www.google.com/search?q={query}&num={self.num_results * 2}"
+        encoded_query = quote_plus(query)
+        search_url = f"https://www.google.com/search?q={encoded_query}&num={self.num_results * 2}"
+        log_debug(f"Search URL: {search_url}")
         
         try:
+            log_debug("Sending GET request to Google")
             response = requests.get(search_url, headers=self.headers, timeout=10)
+            log_debug(f"Response status code: {response.status_code}")
             response.raise_for_status()
+            
+            log_debug("Parsing HTML with BeautifulSoup")
             soup = BeautifulSoup(response.text, 'html.parser')
             
+            log_debug("Searching for result divs")
             search_results = []
             for g in soup.find_all('div', class_='g'):
+                log_debug("Processing a search result div")
                 anchor = g.find('a')
                 title = g.find('h3').text if g.find('h3') else 'No title'
                 url = anchor.get('href', 'No URL') if anchor else 'No URL'
                 
+                description = ''
                 description_div = g.find('div', class_=['VwiC3b', 'yXK7lf'])
-                description = description_div.get_text(strip=True) if description_div else ''
+                if description_div:
+                    description = description_div.get_text(strip=True)
+                else:
+                    description = g.get_text(strip=True)
                 
+                log_debug(f"Found result: Title: {title[:30]}..., URL: {url[:30]}...")
                 search_results.append({
                     'title': title,
                     'description': description,
                     'url': url
                 })
             
+            log_debug(f"Successfully retrieved {len(search_results)} search results for query: {query}")
             return search_results
         except requests.RequestException as e:
-            print(f"Error performing search: {str(e)}")
+            log_debug(f"Error performing search: {str(e)}")
             return []
 
     def _filter_search_results(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        return [result for result in results if result['description'] and result['title'] != 'No title' and result['url'].startswith('https://')]
+        filtered = [result for result in results if result['description'] and result['title'] != 'No title' and result['url'].startswith('https://')]
+        log_debug(f"Filtered to {len(filtered)} results")
+        return filtered
 
     def _remove_duplicates(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen_urls = set()
@@ -1020,13 +1062,11 @@ class WebTool:
             if result['url'] not in seen_urls:
                 seen_urls.add(result['url'])
                 unique_results.append(result)
+        log_debug(f"Removed duplicates, left with {len(unique_results)} results")
         return unique_results
 
     def get_web_content(self, url: str) -> str:
-        """Retrieve the content of a web page."""
-        # Clean the URL
-        url = self._clean_url(url)
-        
+        log_debug(f"Fetching content from: {url}")
         try:
             response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
@@ -1040,25 +1080,25 @@ class WebTool:
             chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
             text = '\n'.join(chunk for chunk in chunks if chunk)
             
-            return text[:self.max_tokens]
+            content = text[:self.max_tokens]
+            log_debug(f"Retrieved {len(content)} characters of content")
+            return content
         except requests.RequestException as e:
-            print(f"Error retrieving content from {url}: {str(e)}")
+            log_debug(f"Error retrieving content from {url}: {str(e)}")
             return ""
 
-    def _clean_url(self, url: str) -> str:
-        """Clean the URL by removing any trailing parentheses and ensuring it starts with http:// or https://"""
-        url = url.rstrip(')')  # Remove trailing parenthesis if present
-        if not url.startswith(('http://', 'https://')):
-            url = 'https://' + url  # Add https:// if missing
-        return url
-
     def is_url(self, text: str) -> bool:
-        """Check if the given text is a valid URL."""
         try:
             result = urlparse(text)
             return all([result.scheme, result.netloc])
         except ValueError:
             return False
+
+    def _clean_url(self, url: str) -> str:
+        url = url.rstrip(')')  # Remove trailing parenthesis if present
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url  # Add https:// if missing
+        return url
 ```
 
 # build\lib\pocketgroq\__init__.py
