@@ -9,6 +9,17 @@ class WebTool:
     def __init__(self, num_results: int = 10, max_tokens: int = 4096):
         self.num_results = num_results
         self.max_tokens = max_tokens
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Referer': 'https://www.google.com/',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Cookie': ''  # This empty string tells the server we accept cookies
+        }
 
     def search(self, query: str) -> List[Dict[str, Any]]:
         """Perform a web search and return results."""
@@ -18,19 +29,10 @@ class WebTool:
         return deduplicated_results[:self.num_results]
 
     def _perform_web_search(self, query: str) -> List[Dict[str, Any]]:
-        headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,/;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.0',
-        'Referer': 'https://www.google.com/',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-    }
         search_url = f"https://www.google.com/search?q={query}&num={self.num_results * 2}"
         
         try:
-            response = requests.get(search_url, headers=headers, timeout=10)
+            response = requests.get(search_url, headers=self.headers, timeout=10)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
             
@@ -68,17 +70,11 @@ class WebTool:
 
     def get_web_content(self, url: str) -> str:
         """Retrieve the content of a web page."""
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,/;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.0',
-            'Referer': 'https://www.google.com/',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-        }
+        # Clean the URL
+        url = self._clean_url(url)
+        
         try:
-            response = requests.get(url, headers=headers, timeout=10)
+            response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
             
@@ -94,6 +90,13 @@ class WebTool:
         except requests.RequestException as e:
             print(f"Error retrieving content from {url}: {str(e)}")
             return ""
+
+    def _clean_url(self, url: str) -> str:
+        """Clean the URL by removing any trailing parentheses and ensuring it starts with http:// or https://"""
+        url = url.rstrip(')')  # Remove trailing parenthesis if present
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url  # Add https:// if missing
+        return url
 
     def is_url(self, text: str) -> bool:
         """Check if the given text is a valid URL."""
