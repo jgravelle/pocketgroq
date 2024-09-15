@@ -1,3 +1,5 @@
+# setup.py
+
 from setuptools import setup, find_packages
 
 with open("README.md", "r", encoding="utf-8") as fh:
@@ -5,10 +7,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pocketgroq",
-    version="0.2.6",  # Increment the version number
+    version="0.3.0",  # Increment the version number
     author="PocketGroq Team",
     author_email="pocketgroq@example.com",
-    description="A library for easy integration with Groq API, including image handling",
+    description="A library for easy integration with Groq API, including image handling and Chain of Thought reasoning",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/jgravelle/pocketgroq",

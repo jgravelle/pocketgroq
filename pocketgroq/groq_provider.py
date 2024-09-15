@@ -8,8 +8,10 @@ import asyncio
 from groq import Groq, AsyncGroq
 from .exceptions import GroqAPIKeyMissingError, GroqAPIError
 from .web_tool import WebTool
+from .chain_of_thought.cot_manager import ChainOfThoughtManager
+from .chain_of_thought.llm_interface import LLMInterface
 
-class GroqProvider:
+class GroqProvider(LLMInterface):
     def __init__(self, api_key: str = None):
         self.api_key = api_key or os.environ.get("GROQ_API_KEY")
         if not self.api_key:
@@ -21,10 +23,16 @@ class GroqProvider:
             "llama3-groq-8b-8192-tool-use-preview"
         ]
         self.web_tool = WebTool()
+        self.cot_manager = ChainOfThoughtManager(llm=self)
 
     def generate(self, prompt: str, **kwargs) -> Union[str, AsyncIterator[str]]:
         messages = [{"role": "user", "content": prompt}]
         return self._create_completion(messages, **kwargs)
+
+    def set_api_key(self, api_key: str):
+        self.api_key = api_key
+        self.client = Groq(api_key=self.api_key)
+        self.async_client = AsyncGroq(api_key=self.api_key)
 
     def _create_completion(self, messages: List[Dict[str, str]], **kwargs) -> Union[str, AsyncIterator[str]]:
         completion_kwargs = {
@@ -159,3 +167,21 @@ class GroqProvider:
     def is_url(self, text: str) -> bool:
         """Check if the given text is a valid URL using the integrated WebTool."""
         return self.web_tool.is_url(text)
+    
+    def solve_problem_with_cot(self, problem: str, **kwargs) -> str:
+        """
+        Solve a problem using Chain of Thought reasoning.
+        """
+        return self.cot_manager.solve_problem(problem)
+
+    def generate_cot(self, problem: str, **kwargs) -> List[str]:
+        """
+        Generate Chain of Thought steps for a given problem.
+        """
+        return self.cot_manager.generate_cot(problem)
+
+    def synthesize_cot(self, cot_steps: List[str], **kwargs) -> str:
+        """
+        Synthesize a final answer from Chain of Thought steps.
+        """
+        return self.cot_manager.synthesize_response(cot_steps)

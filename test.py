@@ -210,24 +210,114 @@ def test_vision():
     print(response_url)
     assert isinstance(response_url, str) and len(response_url) > 0
 
-def main():
-    try:
-        test_basic_chat_completion()
-        test_streaming_chat_completion()
-        test_override_default_model()
-        test_chat_completion_with_stop_sequence()
-        asyncio.run(test_async_generation())
-        asyncio.run(test_streaming_async_chat_completion())
-        test_json_mode()
-        test_tool_usage()
-        test_vision()
-        print("\nAll tests completed successfully!")
-    except GroqAPIKeyMissingError as e:
-        print(f"Error: {e}")
-    except GroqAPIError as e:
-        print(f"API Error: {e}")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
+def test_cot_problem_solving():
+    print("\nTesting Chain of Thought Problem Solving...")
+    complex_problem = """
+    A farmer has a rectangular field that is 100 meters long and 50 meters wide. 
+    He wants to increase the area of the field by 20% by increasing both the length and the width by the same percentage. 
+    What should be the new length and width of the field? 
+    Round your answer to the nearest centimeter.
+    """
+    answer = groq.solve_problem_with_cot(complex_problem)
+    print("Problem:", complex_problem)
+    print("Answer:", answer)
+    assert isinstance(answer, str) and len(answer) > 0
+
+def test_cot_step_generation():
+    print("\nTesting Chain of Thought Step Generation...")
+    problem = "What is the sum of the first 10 prime numbers?"
+    cot_steps = groq.generate_cot(problem)
+    print("Problem:", problem)
+    print("Chain of Thought Steps:")
+    for i, step in enumerate(cot_steps, 1):
+        print(f"{i}. {step}")
+    assert isinstance(cot_steps, list) and len(cot_steps) > 0
+
+def test_cot_synthesis():
+    print("\nTesting Chain of Thought Synthesis...")
+    cot_steps = [
+        "The first 10 prime numbers are: 2, 3, 5, 7, 11, 13, 17, 19, 23, 29",
+        "To find the sum, we add these numbers: 2 + 3 + 5 + 7 + 11 + 13 + 17 + 19 + 23 + 29",
+        "Calculating the sum: 129"
+    ]
+    final_answer = groq.synthesize_cot(cot_steps)
+    print("Chain of Thought Steps:", cot_steps)
+    print("Synthesized Answer:", final_answer)
+    assert isinstance(final_answer, str) and len(final_answer) > 0
+
+def display_menu():
+    print("\nPocketGroq Test Menu:")
+    print("1. Basic Chat Completion")
+    print("2. Streaming Chat Completion")
+    print("3. Override Default Model")
+    print("4. Chat Completion with Stop Sequence")
+    print("5. Asynchronous Generation")
+    print("6. Streaming Async Chat Completion")
+    print("7. JSON Mode")
+    print("8. Tool Usage")
+    print("9. Vision")
+    print("10. Chain of Thought Problem Solving")
+    print("11. Chain of Thought Step Generation")
+    print("12. Chain of Thought Synthesis")
+    print("13. Run All Tests")
+    print("0. Exit")
+
+async def main():
+    while True:
+        display_menu()
+        choice = input("Enter your choice (0-13): ")
+        
+        try:
+            if choice == '0':
+                break
+            elif choice == '1':
+                test_basic_chat_completion()
+            elif choice == '2':
+                test_streaming_chat_completion()
+            elif choice == '3':
+                test_override_default_model()
+            elif choice == '4':
+                test_chat_completion_with_stop_sequence()
+            elif choice == '5':
+                await test_async_generation()
+            elif choice == '6':
+                await test_streaming_async_chat_completion()
+            elif choice == '7':
+                test_json_mode()
+            elif choice == '8':
+                test_tool_usage()
+            elif choice == '9':
+                test_vision()
+            elif choice == '10':
+                test_cot_problem_solving()
+            elif choice == '11':
+                test_cot_step_generation()
+            elif choice == '12':
+                test_cot_synthesis()
+            elif choice == '13':
+                test_basic_chat_completion()
+                test_streaming_chat_completion()
+                test_override_default_model()
+                test_chat_completion_with_stop_sequence()
+                await test_async_generation()
+                await test_streaming_async_chat_completion()
+                test_json_mode()
+                test_tool_usage()
+                test_vision()
+                test_cot_problem_solving()
+                test_cot_step_generation()
+                test_cot_synthesis()
+                print("\nAll tests completed successfully!")
+            else:
+                print("Invalid choice. Please try again.")
+        except GroqAPIKeyMissingError as e:
+            print(f"Error: {e}")
+        except GroqAPIError as e:
+            print(f"API Error: {e}")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+        
+        input("\nPress Enter to continue...")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
