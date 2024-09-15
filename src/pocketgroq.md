@@ -1,6 +1,8 @@
 # setup.py
 
 ```python
+# setup.py
+
 from setuptools import setup, find_packages
 
 with open("README.md", "r", encoding="utf-8") as fh:
@@ -8,10 +10,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pocketgroq",
-    version="0.2.6",  # Increment the version number
+    version="0.3.0",  # Increment the version number
     author="PocketGroq Team",
     author_email="pocketgroq@example.com",
-    description="A library for easy integration with Groq API, including image handling",
+    description="A library for easy integration with Groq API, including image handling and Chain of Thought reasoning",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/jgravelle/pocketgroq",
@@ -261,27 +263,117 @@ def test_vision():
     print(response_url)
     assert isinstance(response_url, str) and len(response_url) > 0
 
-def main():
-    try:
-        test_basic_chat_completion()
-        test_streaming_chat_completion()
-        test_override_default_model()
-        test_chat_completion_with_stop_sequence()
-        asyncio.run(test_async_generation())
-        asyncio.run(test_streaming_async_chat_completion())
-        test_json_mode()
-        test_tool_usage()
-        test_vision()
-        print("\nAll tests completed successfully!")
-    except GroqAPIKeyMissingError as e:
-        print(f"Error: {e}")
-    except GroqAPIError as e:
-        print(f"API Error: {e}")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
+def test_cot_problem_solving():
+    print("\nTesting Chain of Thought Problem Solving...")
+    complex_problem = """
+    A farmer has a rectangular field that is 100 meters long and 50 meters wide. 
+    He wants to increase the area of the field by 20% by increasing both the length and the width by the same percentage. 
+    What should be the new length and width of the field? 
+    Round your answer to the nearest centimeter.
+    """
+    answer = groq.solve_problem_with_cot(complex_problem)
+    print("Problem:", complex_problem)
+    print("Answer:", answer)
+    assert isinstance(answer, str) and len(answer) > 0
+
+def test_cot_step_generation():
+    print("\nTesting Chain of Thought Step Generation...")
+    problem = "What is the sum of the first 10 prime numbers?"
+    cot_steps = groq.generate_cot(problem)
+    print("Problem:", problem)
+    print("Chain of Thought Steps:")
+    for i, step in enumerate(cot_steps, 1):
+        print(f"{i}. {step}")
+    assert isinstance(cot_steps, list) and len(cot_steps) > 0
+
+def test_cot_synthesis():
+    print("\nTesting Chain of Thought Synthesis...")
+    cot_steps = [
+        "The first 10 prime numbers are: 2, 3, 5, 7, 11, 13, 17, 19, 23, 29",
+        "To find the sum, we add these numbers: 2 + 3 + 5 + 7 + 11 + 13 + 17 + 19 + 23 + 29",
+        "Calculating the sum: 129"
+    ]
+    final_answer = groq.synthesize_cot(cot_steps)
+    print("Chain of Thought Steps:", cot_steps)
+    print("Synthesized Answer:", final_answer)
+    assert isinstance(final_answer, str) and len(final_answer) > 0
+
+def display_menu():
+    print("\nPocketGroq Test Menu:")
+    print("1. Basic Chat Completion")
+    print("2. Streaming Chat Completion")
+    print("3. Override Default Model")
+    print("4. Chat Completion with Stop Sequence")
+    print("5. Asynchronous Generation")
+    print("6. Streaming Async Chat Completion")
+    print("7. JSON Mode")
+    print("8. Tool Usage")
+    print("9. Vision")
+    print("10. Chain of Thought Problem Solving")
+    print("11. Chain of Thought Step Generation")
+    print("12. Chain of Thought Synthesis")
+    print("13. Run All Tests")
+    print("0. Exit")
+
+async def main():
+    while True:
+        display_menu()
+        choice = input("Enter your choice (0-13): ")
+        
+        try:
+            if choice == '0':
+                break
+            elif choice == '1':
+                test_basic_chat_completion()
+            elif choice == '2':
+                test_streaming_chat_completion()
+            elif choice == '3':
+                test_override_default_model()
+            elif choice == '4':
+                test_chat_completion_with_stop_sequence()
+            elif choice == '5':
+                await test_async_generation()
+            elif choice == '6':
+                await test_streaming_async_chat_completion()
+            elif choice == '7':
+                test_json_mode()
+            elif choice == '8':
+                test_tool_usage()
+            elif choice == '9':
+                test_vision()
+            elif choice == '10':
+                test_cot_problem_solving()
+            elif choice == '11':
+                test_cot_step_generation()
+            elif choice == '12':
+                test_cot_synthesis()
+            elif choice == '13':
+                test_basic_chat_completion()
+                test_streaming_chat_completion()
+                test_override_default_model()
+                test_chat_completion_with_stop_sequence()
+                await test_async_generation()
+                await test_streaming_async_chat_completion()
+                test_json_mode()
+                test_tool_usage()
+                test_vision()
+                test_cot_problem_solving()
+                test_cot_step_generation()
+                test_cot_synthesis()
+                print("\nAll tests completed successfully!")
+            else:
+                print("Invalid choice. Please try again.")
+        except GroqAPIKeyMissingError as e:
+            print(f"Error: {e}")
+        except GroqAPIError as e:
+            print(f"API Error: {e}")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+        
+        input("\nPress Enter to continue...")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
 ```
 
 # pocketgroq\config.py
@@ -332,8 +424,10 @@ import asyncio
 from groq import Groq, AsyncGroq
 from .exceptions import GroqAPIKeyMissingError, GroqAPIError
 from .web_tool import WebTool
+from .chain_of_thought.cot_manager import ChainOfThoughtManager
+from .chain_of_thought.llm_interface import LLMInterface
 
-class GroqProvider:
+class GroqProvider(LLMInterface):
     def __init__(self, api_key: str = None):
         self.api_key = api_key or os.environ.get("GROQ_API_KEY")
         if not self.api_key:
@@ -345,10 +439,16 @@ class GroqProvider:
             "llama3-groq-8b-8192-tool-use-preview"
         ]
         self.web_tool = WebTool()
+        self.cot_manager = ChainOfThoughtManager(llm=self)
 
     def generate(self, prompt: str, **kwargs) -> Union[str, AsyncIterator[str]]:
         messages = [{"role": "user", "content": prompt}]
         return self._create_completion(messages, **kwargs)
+
+    def set_api_key(self, api_key: str):
+        self.api_key = api_key
+        self.client = Groq(api_key=self.api_key)
+        self.async_client = AsyncGroq(api_key=self.api_key)
 
     def _create_completion(self, messages: List[Dict[str, str]], **kwargs) -> Union[str, AsyncIterator[str]]:
         completion_kwargs = {
@@ -483,6 +583,24 @@ class GroqProvider:
     def is_url(self, text: str) -> bool:
         """Check if the given text is a valid URL using the integrated WebTool."""
         return self.web_tool.is_url(text)
+    
+    def solve_problem_with_cot(self, problem: str, **kwargs) -> str:
+        """
+        Solve a problem using Chain of Thought reasoning.
+        """
+        return self.cot_manager.solve_problem(problem)
+
+    def generate_cot(self, problem: str, **kwargs) -> List[str]:
+        """
+        Generate Chain of Thought steps for a given problem.
+        """
+        return self.cot_manager.generate_cot(problem)
+
+    def synthesize_cot(self, cot_steps: List[str], **kwargs) -> str:
+        """
+        Synthesize a final answer from Chain of Thought steps.
+        """
+        return self.cot_manager.synthesize_response(cot_steps)
 ```
 
 # pocketgroq\utils.py
@@ -635,12 +753,15 @@ class WebTool:
 # pocketgroq\__init__.py
 
 ```python
+# pocketgroq/__init__.py
+
 from .groq_provider import GroqProvider
 from .exceptions import GroqAPIKeyMissingError, GroqAPIError
 from .config import get_api_key
-    
+from .chain_of_thought.cot_manager import ChainOfThoughtManager
+from .chain_of_thought.llm_interface import LLMInterface
 
-__all__ = ['GroqProvider', 'GroqAPIKeyMissingError', 'GroqAPIError', 'get_api_key']
+__all__ = ['GroqProvider', 'GroqAPIKeyMissingError', 'GroqAPIError', 'get_api_key', 'ChainOfThoughtManager', 'LLMInterface']
 ```
 
 # tests\test_groq_provider.py
@@ -751,6 +872,108 @@ def test_api_error(mock_groq_client):
     provider = GroqProvider(api_key='test_api_key')
     with pytest.raises(GroqAPIError):
         provider.generate("Test prompt")
+```
+
+# pocketgroq\chain_of_thought\cot_manager.py
+
+```python
+# pocketgroq/chain_of_thought/cot_manager.py
+
+from typing import List
+from .llm_interface import LLMInterface
+from .utils import sanitize_input
+
+class ChainOfThoughtManager:
+    """
+    Manages the Chain-of-Thought reasoning process.
+    """
+    def __init__(self, llm: LLMInterface, cot_prompt_template: str = None):
+        """
+        Initialize with an LLM instance and an optional CoT prompt template.
+        """
+        self.llm = llm
+        self.cot_prompt_template = cot_prompt_template or (
+            "Solve the following problem step by step:\n\n{problem}\n\nSolution:"
+        )
+
+    def generate_cot(self, problem: str) -> List[str]:
+        """
+        Generate intermediate reasoning steps (Chain-of-Thought) for the given problem.
+        """
+        sanitized_problem = sanitize_input(problem)
+        prompt = self.cot_prompt_template.format(problem=sanitized_problem)
+        response = self.llm.generate(prompt)
+        cot_steps = self._parse_cot(response)
+        return cot_steps
+
+    def synthesize_response(self, cot_steps: List[str]) -> str:
+        """
+        Synthesize the final answer from the Chain-of-Thought steps.
+        """
+        synthesis_prompt = "Based on the following reasoning steps, provide a concise answer:\n\n"
+        synthesis_prompt += "\n".join(cot_steps) + "\n\nAnswer:"
+        final_response = self.llm.generate(synthesis_prompt)
+        return final_response.strip()
+
+    def solve_problem(self, problem: str) -> str:
+        """
+        Complete process to solve a problem using Chain-of-Thought.
+        """
+        cot = self.generate_cot(problem)
+        answer = self.synthesize_response(cot)
+        return answer
+
+    def _parse_cot(self, response: str) -> List[str]:
+        """
+        Parse the LLM response to extract individual reasoning steps.
+        This method can be customized based on how the LLM formats its output.
+        """
+        # Simple split by newline for demonstration; can be enhanced.
+        steps = [line.strip() for line in response.split('\n') if line.strip()]
+        return steps
+```
+
+# pocketgroq\chain_of_thought\llm_interface.py
+
+```python
+# pocketgroq/chain_of_thought/llm_interface.py
+
+from abc import ABC, abstractmethod
+from typing import List
+
+class LLMInterface(ABC):
+    """
+    Abstract base class for LLM integrations.
+    """
+    @abstractmethod
+    def generate(self, prompt: str, max_tokens: int = 150) -> str:
+        """
+        Generate a response from the LLM based on the prompt.
+        """
+        pass
+
+    @abstractmethod
+    def set_api_key(self, api_key: str):
+        """
+        Set the API key for the LLM service.
+        """
+        pass
+```
+
+# pocketgroq\chain_of_thought\utils.py
+
+```python
+# pocketgroq/chain_of_thought/utils.py
+
+import re
+
+def sanitize_input(text: str) -> str:
+    """
+    Sanitize user input to prevent injection attacks or unwanted content.
+    """
+    # Remove potentially harmful characters or patterns
+    sanitized = re.sub(r'[<>]', '', text)
+    return sanitized.strip()
 ```
 
 # build\lib\pocketgroq\config.py
