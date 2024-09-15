@@ -1,8 +1,22 @@
 # PocketGroq
 
-PocketGroq provides a simpler interface to interact with the Groq API, aiding in rapid development by abstracting complex API calls into simple functions. It now includes a powerful WebTool for web searches and content retrieval, enhancing its capabilities for information gathering and processing.
+PocketGroq provides a simpler interface to interact with the Groq API, aiding in rapid development by abstracting complex API calls into simple functions. It now includes a powerful WebTool for web searches and content retrieval, enhancing its capabilities for information gathering and processing. The latest version also introduces Chain of Thought (CoT) reasoning capabilities, making it even more versatile for complex problem-solving tasks.
 
-![image](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
+![PocketGroq Logo](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
+
+## New Features
+
+### Chain of Thought (CoT) Reasoning
+
+PocketGroq now supports Chain of Thought reasoning, allowing for more complex problem-solving and step-by-step analysis. The new CoT features include:
+
+- `solve_problem_with_cot(problem: str)`: Solves a complex problem using Chain of Thought reasoning.
+- `generate_cot(problem: str)`: Generates intermediate reasoning steps for a given problem.
+- `synthesize_cot(cot_steps: List[str])`: Synthesizes a final answer from Chain of Thought steps.
+
+### Enhanced Test Suite
+
+The test suite has been expanded and now includes a menu-driven interface for selective test execution. New tests have been added for the Chain of Thought functionality.
 
 ## Installation and Upgrading
 
@@ -50,7 +64,7 @@ This will fetch and install the most recent version of PocketGroq from PyPI, alo
 To upgrade to a specific version, you can specify the version number:
 
 ```bash
-pip install --upgrade pocketgroq==0.2.6
+pip install --upgrade pocketgroq==0.3.0
 ```
 
 After upgrading, it's a good idea to verify the installed version:
@@ -315,6 +329,40 @@ response_base64 = groq.generate(
 print(response_base64)
 ```
 
+## Chain of Thought Usage
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+
+# Solve a complex problem using Chain of Thought
+problem = """
+A farmer has a rectangular field that is 100 meters long and 50 meters wide. 
+He wants to increase the area of the field by 20% by increasing both the length and the width by the same percentage. 
+What should be the new length and width of the field? 
+Round your answer to the nearest centimeter.
+"""
+answer = groq.solve_problem_with_cot(problem)
+print("Answer:", answer)
+
+# Generate Chain of Thought steps
+problem = "What is the sum of the first 10 prime numbers?"
+cot_steps = groq.generate_cot(problem)
+print("Chain of Thought Steps:")
+for i, step in enumerate(cot_steps, 1):
+    print(f"{i}. {step}")
+
+# Synthesize an answer from Chain of Thought steps
+cot_steps = [
+    "The first 10 prime numbers are: 2, 3, 5, 7, 11, 13, 17, 19, 23, 29",
+    "To find the sum, we add these numbers: 2 + 3 + 5 + 7 + 11 + 13 + 17 + 19 + 23 + 29",
+    "Calculating the sum: 129"
+]
+final_answer = groq.synthesize_cot(cot_steps)
+print("Synthesized Answer:", final_answer)
+```
+
 ## WebTool Functionality
 
 The WebTool provides two main functions:
@@ -423,25 +471,126 @@ research_summary = groq.generate(
 print(research_summary)
 ```
 
+7. **Complex Problem Solving**: Utilize PocketGroq's Chain of Thought capabilities for solving intricate problems.
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+
+complex_problem = """In a small town, 60% of the adults work in manufacturing, 25% work in services, and the rest are unemployed. 
+If the town has 10,000 adults and the local government wants to reduce unemployment by half by creating new 
+manufacturing jobs, how many new jobs need to be created?
+"""
+
+solution = groq.solve_problem_with_cot(complex_problem)
+print(solution)
+```
+
+## Testing
+
+PocketGroq now includes a comprehensive test suite with a menu-driven interface for selective test execution. To run the tests:
+
+1. Navigate to the PocketGroq directory.
+2. Run the test script:
+
+```bash
+python test.py
+```
+
+3. You will see a menu with options to run individual tests or all tests at once:
+
+```
+PocketGroq Test Menu:
+1. Basic Chat Completion
+2. Streaming Chat Completion
+3. Override Default Model
+4. Chat Completion with Stop Sequence
+5. Asynchronous Generation
+6. Streaming Async Chat Completion
+7. JSON Mode
+8. Tool Usage
+9. Vision
+10. Chain of Thought Problem Solving
+11. Chain of Thought Step Generation
+12. Chain of Thought Synthesis
+13. Run All Tests
+0. Exit
+```
+
+4. Select the desired option by entering the corresponding number.
+
+The test suite covers:
+
+- Basic chat completion
+- Streaming chat completion
+- Model override
+- Chat completion with stop sequence
+- Asynchronous generation
+- Streaming asynchronous chat completion
+- JSON mode
+- Tool usage
+- Vision capabilities
+- Chain of Thought problem solving
+- Chain of Thought step generation
+- Chain of Thought synthesis
+
+Each test demonstrates a specific feature of PocketGroq and checks if the output meets the expected criteria. Running these tests helps ensure that all functionalities are working correctly after updates or modifications to the codebase.
+
 ## Configuration
 
-PocketGroq uses environment variables for configuration. Set `GROQ_API_KEY` in your environment or in a `.env` file in your project root.
+PocketGroq uses environment variables for configuration. Set `GROQ_API_KEY` in your environment or in a `.env` file in your project root. This API key is essential for authenticating with the Groq API.
+
+Example of setting the API key in a `.env` file:
+
+```
+GROQ_API_KEY=your_api_key_here
+```
+
+Make sure to keep your API key confidential and never commit it to version control.
 
 ## Error Handling
 
-PocketGroq raises custom exceptions:
+PocketGroq raises custom exceptions to help you handle errors more effectively:
 
 - `GroqAPIKeyMissingError`: Raised when the Groq API key is missing.
 - `GroqAPIError`: Raised when there's an error with the Groq API.
 
-Handle these exceptions in your code for robust error management.
+Handle these exceptions in your code for robust error management. For example:
+
+```python
+from pocketgroq import GroqProvider, GroqAPIKeyMissingError, GroqAPIError
+
+try:
+    groq = GroqProvider()
+    response = groq.generate("Hello, world!")
+except GroqAPIKeyMissingError:
+    print("Please set your GROQ_API_KEY environment variable.")
+except GroqAPIError as e:
+    print(f"An error occurred while calling the Groq API: {e}")
+```
 
 ## Contributing
 
-Feel free to open issues or submit pull requests on the [GitHub repository](https://github.com/jgravelle/pocketgroq) if you encounter any problems or have feature suggestions.
+Contributions to PocketGroq are welcome! If you encounter any problems, have feature suggestions, or want to improve the codebase, feel free to:
+
+1. Open issues on the [GitHub repository](https://github.com/jgravelle/pocketgroq).
+2. Submit pull requests with bug fixes or new features.
+3. Improve documentation or add examples.
+
+When contributing, please:
+
+- Follow the existing code style and conventions.
+- Write clear commit messages.
+- Add or update tests for new features or bug fixes.
+- Update the README if you're adding new functionality.
 
 ## License
 
-This project is licensed under the MIT License. Mention J. Gravelle in your code and/or docs. He's kinda full of himself.
+This project is licensed under the MIT License. When using PocketGroq in your projects, please include a mention of J. Gravelle in your code and/or documentation. He's kinda full of himself, but he'd appreciate the acknowledgment.
 
-![image](https://github.com/user-attachments/assets/73c812cd-685e-4969-9497-639ae9312d6c)
+![J. Gravelle](https://github.com/user-attachments/assets/73c812cd-685e-4969-9497-639ae9312d6c)
+
+---
+
+Thank you for using PocketGroq! We hope this tool enhances your development process and enables you to create amazing AI-powered applications with ease. If you have any questions or need further assistance, don't hesitate to reach out to the community or check the documentation. Happy coding!
