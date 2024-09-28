@@ -6,11 +6,12 @@ PocketGroq provides a simpler interface to interact with the Groq API, aiding in
 
 ## What's New in v0.4.0
 
-- **Retrieval-Augmented Generation (RAG)**: Enhance responses with context from external documents and web pages.
+- **Retrieval-Augmented Generation (RAG)**: Enhance responses with context from external documents and web pages. (Requires Ollama server for embeddings)
 - **Improved Document Handling**: Load and query both local and web-based documents.
 - **Context-Aware Generation**: Generate responses that leverage loaded document context.
+- **Ollama Integration**: Utilizes Ollama for efficient, locally-generated embeddings in RAG functionality.
 
-For full details on the new RAG features, see the [RAG Features](#rag-features) section below.
+For full details on the new RAG features and Ollama setup, see the [RAG Features](#rag-features) and [Ollama Server Requirement for RAG](#ollama-server-requirement-for-rag) sections below.
 
 # PocketGroq v0.4.0: Now with Retrieval-Augmented Generation (RAG)!
 
@@ -620,6 +621,44 @@ The test suite covers:
 - Chain of Thought synthesis
 
 Each test demonstrates a specific feature of PocketGroq and checks if the output meets the expected criteria. Running these tests helps ensure that all functionalities are working correctly after updates or modifications to the codebase.
+
+## Ollama Server Requirement for RAG
+
+The new Retrieval-Augmented Generation (RAG) feature in PocketGroq v0.4.0 requires an Ollama server for generating embeddings. Ollama is an open-source, locally-run language model server that provides fast and efficient embeddings for RAG functionality.
+
+### Setting up Ollama
+
+1. **Install Ollama**:
+   Visit the official Ollama website at [https://ollama.ai/](https://ollama.ai/) and follow the installation instructions for your operating system.
+
+2. **Start the Ollama server**:
+   After installation, start the Ollama server by running the following command in your terminal:
+   ```
+   ollama serve
+   ```
+
+3. **Pull the required model**:
+   PocketGroq uses the 'nomic-embed-text' model for embeddings. Pull this model by running:
+   ```
+   ollama pull nomic-embed-text
+   ```
+
+### Configuring PocketGroq for Ollama
+
+By default, PocketGroq will attempt to connect to the Ollama server at `http://localhost:11434`. If your Ollama server is running on a different address or port, you can specify this when initializing RAG:
+
+```python
+groq = GroqProvider()
+groq.initialize_rag(ollama_base_url="http://your-ollama-server:port")
+```
+
+### Troubleshooting
+
+- Ensure the Ollama server is running before using RAG features in PocketGroq.
+- If you encounter connection errors, check that the Ollama server is accessible at the expected address and port.
+- For Windows users using WSL (Windows Subsystem for Linux), you may need to adjust the base URL to point to your WSL IP address instead of localhost.
+
+For more detailed information about Ollama, including advanced configuration and available models, please refer to the [Ollama documentation](https://github.com/ollama/ollama).
 
 ## Configuration
 
