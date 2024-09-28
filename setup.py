@@ -1,5 +1,4 @@
 # setup.py
-
 from setuptools import setup, find_packages
 
 with open("README.md", "r", encoding="utf-8") as fh:
@@ -7,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pocketgroq",
-    version="0.4.0",  # Increment the version number
+    version="0.4.1",  # Incremented the version number
     author="PocketGroq Team",
     author_email="pocketgroq@example.com",
     description="A library for easy integration with Groq API, including image handling and Chain of Thought reasoning",
@@ -32,14 +31,20 @@ setup(
     packages=find_packages(exclude=["tests", "tests.*"]),
     python_requires=">=3.7",
     install_requires=[
-        "groq==0.8.0",
-        "python-dotenv==0.19.1",
+        "bs4>=0.0.2",
+        "groq>=0.8.0",
+        "python-dotenv>=0.19.1",
         "requests>=2.32.3",
+        "langchain>=0.3.1",
+        "langchain-groq>=0.2.0",
+        "langchain-community>=0.3.1",
+        "faiss-cpu>=1.8.0.post1",
+        "ollama>=0.3.3",
     ],
     extras_require={
         "dev": [
-            "pytest==7.3.1",
-            "pytest-asyncio==0.21.0",
+            "pytest>=7.3.1",
+            "pytest-asyncio>=0.21.0",
         ],
     },
 )

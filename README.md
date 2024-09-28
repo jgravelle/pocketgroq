@@ -1,10 +1,10 @@
-# PocketGroq v0.4.0
+# PocketGroq v0.4.1
 
-PocketGroq provides a simpler interface to interact with the Groq API, aiding in rapid development by abstracting complex API calls into simple functions. Version 0.4.0 introduces powerful Retrieval-Augmented Generation (RAG) capabilities, enhancing its ability to provide context-aware responses. It also includes a WebTool for web searches and content retrieval, and Chain of Thought (CoT) reasoning capabilities, making it even more versatile for complex problem-solving tasks.
+PocketGroq provides a simpler interface to interact with the Groq API, aiding in rapid development by abstracting complex API calls into simple functions. Version 0.4.1 introduces powerful Retrieval-Augmented Generation (RAG) capabilities, enhancing its ability to provide context-aware responses. It also includes a WebTool for web searches and content retrieval, and Chain of Thought (CoT) reasoning capabilities, making it even more versatile for complex problem-solving tasks.
 
 ![PocketGroq Logo](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
 
-## What's New in v0.4.0
+## What's New in v0.4.1
 
 - **Retrieval-Augmented Generation (RAG)**: Enhance responses with context from external documents and web pages. (Requires Ollama server for embeddings)
 - **Improved Document Handling**: Load and query both local and web-based documents.
@@ -13,9 +13,9 @@ PocketGroq provides a simpler interface to interact with the Groq API, aiding in
 
 For full details on the new RAG features and Ollama setup, see the [RAG Features](#rag-features) and [Ollama Server Requirement for RAG](#ollama-server-requirement-for-rag) sections below.
 
-# PocketGroq v0.4.0: Now with Retrieval-Augmented Generation (RAG)!
+# PocketGroq v0.4.1: Now with Retrieval-Augmented Generation (RAG)!
 
-PocketGroq has been upgraded to version 0.4.0, introducing powerful Retrieval-Augmented Generation (RAG) capabilities. This major update enhances PocketGroq's ability to provide context-aware responses by leveraging external knowledge sources.
+PocketGroq has been upgraded to version 0.4.1, introducing powerful Retrieval-Augmented Generation (RAG) capabilities. This major update enhances PocketGroq's ability to provide context-aware responses by leveraging external knowledge sources.
 
 ## New RAG Features
 
@@ -87,7 +87,7 @@ This RAG functionality allows PocketGroq to:
 - Provide more accurate and context-aware information
 - Support complex research and analysis tasks
 
-Upgrade to PocketGroq v0.4.0 today to leverage these powerful new RAG capabilities in your projects!
+Upgrade to PocketGroq v0.4.1 today to leverage these powerful new RAG capabilities in your projects!
 
 ## Other New Features
 
@@ -624,7 +624,7 @@ Each test demonstrates a specific feature of PocketGroq and checks if the output
 
 ## Ollama Server Requirement for RAG
 
-The new Retrieval-Augmented Generation (RAG) feature in PocketGroq v0.4.0 requires an Ollama server for generating embeddings. Ollama is an open-source, locally-run language model server that provides fast and efficient embeddings for RAG functionality.
+The new Retrieval-Augmented Generation (RAG) feature in PocketGroq v0.4.1 requires an Ollama server for generating embeddings. Ollama is an open-source, locally-run language model server that provides fast and efficient embeddings for RAG functionality.
 
 ### Setting up Ollama
 
