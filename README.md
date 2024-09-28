@@ -1,10 +1,94 @@
-# PocketGroq
+# PocketGroq v0.4.0
 
-PocketGroq provides a simpler interface to interact with the Groq API, aiding in rapid development by abstracting complex API calls into simple functions. It now includes a powerful WebTool for web searches and content retrieval, enhancing its capabilities for information gathering and processing. The latest version also introduces Chain of Thought (CoT) reasoning capabilities, making it even more versatile for complex problem-solving tasks.
+PocketGroq provides a simpler interface to interact with the Groq API, aiding in rapid development by abstracting complex API calls into simple functions. Version 0.4.0 introduces powerful Retrieval-Augmented Generation (RAG) capabilities, enhancing its ability to provide context-aware responses. It also includes a WebTool for web searches and content retrieval, and Chain of Thought (CoT) reasoning capabilities, making it even more versatile for complex problem-solving tasks.
 
 ![PocketGroq Logo](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
 
-## New Features
+## What's New in v0.4.0
+
+- **Retrieval-Augmented Generation (RAG)**: Enhance responses with context from external documents and web pages.
+- **Improved Document Handling**: Load and query both local and web-based documents.
+- **Context-Aware Generation**: Generate responses that leverage loaded document context.
+
+For full details on the new RAG features, see the [RAG Features](#rag-features) section below.
+
+# PocketGroq v0.4.0: Now with Retrieval-Augmented Generation (RAG)!
+
+PocketGroq has been upgraded to version 0.4.0, introducing powerful Retrieval-Augmented Generation (RAG) capabilities. This major update enhances PocketGroq's ability to provide context-aware responses by leveraging external knowledge sources.
+
+## New RAG Features
+
+### Initializing RAG
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+groq.initialize_rag()  # Initialize RAG with default settings
+```
+
+### Loading Documents
+
+```python
+# Load a local document
+groq.load_documents("path/to/local/document.txt")
+
+# Load content from a web page
+groq.load_documents("https://example.com/article")
+```
+
+### Querying Documents
+
+```python
+query = "What are the main benefits of renewable energy?"
+response = groq.query_documents(query)
+print(response)
+```
+
+### RAG-Enhanced Generation
+
+```python
+prompt = "Explain the impact of renewable energy on climate change, using the loaded documents as context."
+response = groq.generate(prompt, use_rag=True)
+print(response)
+```
+
+## RAG Use Case: Research Assistant
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+groq.initialize_rag()
+
+# Load multiple sources
+groq.load_documents("https://en.wikipedia.org/wiki/Renewable_energy")
+groq.load_documents("https://www.energy.gov/eere/renewables")
+groq.load_documents("path/to/local/energy_report.pdf")
+
+# Perform a complex query
+query = "Summarize the current state of renewable energy adoption globally, highlighting key challenges and opportunities."
+response = groq.query_documents(query)
+
+print("Research Summary:")
+print(response)
+
+# Generate a report based on the research
+report_prompt = f"Using the following research summary as a basis, write a detailed report on the global state of renewable energy:\n\n{response}"
+report = groq.generate(report_prompt, use_rag=True, max_tokens=2000)
+
+print("\nGenerated Report:")
+print(report)
+```
+
+This RAG functionality allows PocketGroq to:
+- Integrate external knowledge into its responses
+- Provide more accurate and context-aware information
+- Support complex research and analysis tasks
+
+Upgrade to PocketGroq v0.4.0 today to leverage these powerful new RAG capabilities in your projects!
+
+## Other New Features
 
 ### Chain of Thought (CoT) Reasoning
 

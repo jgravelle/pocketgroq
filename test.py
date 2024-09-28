@@ -1,6 +1,10 @@
 import asyncio
 import json
 import logging
+import os
+import subprocess
+import tempfile
+
 from typing import List, Optional, Union
 from pydantic import BaseModel, Field, validator
 from pocketgroq import GroqProvider, GroqAPIKeyMissingError, GroqAPIError
@@ -188,11 +192,13 @@ def test_tool_usage():
                         }
                     },
                     "required": ["input_string"],
-                },
-                "implementation": reverse_string
+                }
             }
         }
     ]
+
+    # Register the tool implementation
+    groq.register_tool("reverse_string", reverse_string)
 
     response = groq.generate("Please reverse the string 'hello world'", tools=tools)
     print("Response:", response)
@@ -245,6 +251,94 @@ def test_cot_synthesis():
     print("Synthesized Answer:", final_answer)
     assert isinstance(final_answer, str) and len(final_answer) > 0
 
+def test_rag_initialization():
+    print("\nTesting RAG Initialization...")
+    try:
+        # Ensure Ollama is running
+        try:
+            subprocess.run(["ollama", "list"], check=True, capture_output=True)
+        except subprocess.CalledProcessError:
+            print("Ollama is not running. Please start Ollama service.")
+            return
+
+        groq.initialize_rag()  # Use default Ollama URL and model
+        print("RAG initialized successfully.")
+        assert groq.rag_manager is not None
+    except Exception as e:
+        print(f"Failed to initialize RAG: {e}")
+        raise
+
+def test_document_loading():
+    print("\nTesting Document Loading...")
+    try:
+        # Ensure RAG is initialized
+        if not groq.rag_manager:
+            groq.initialize_rag()
+
+        def progress_callback(current, total):
+            print(f"Processing document chunks: {current}/{total}")
+
+        # Create a temporary file with some content
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as temp_file:
+            temp_file.write("This is a test document about artificial intelligence and machine learning.")
+            temp_file_path = temp_file.name
+
+        groq.load_documents(temp_file_path, progress_callback=progress_callback, timeout=60)  # 1-minute timeout
+        print("Local document loaded successfully.")
+        assert groq.rag_manager.vector_store is not None
+
+        # Test loading from a URL with a shorter timeout
+        try:
+            groq.load_documents("https://en.wikipedia.org/wiki/Artificial_intelligence", 
+                                progress_callback=progress_callback, timeout=120)  # 2-minute timeout
+            print("Web document loaded successfully.")
+        except TimeoutError:
+            print("Web document loading timed out, but local document was processed successfully.")
+        
+        assert groq.rag_manager.vector_store is not None
+    except Exception as e:
+        print(f"Failed to load document: {e}")
+        raise
+    finally:
+        # Clean up the temporary file
+        os.unlink(temp_file_path)
+
+def test_document_querying():
+    print("\nTesting Document Querying...")
+    query = "What is the main topic of the document?"
+    try:
+        response = groq.query_documents(query)
+        print(f"Query: {query}")
+        print(f"Response: {response}")
+        assert isinstance(response, str) and len(response) > 0
+    except Exception as e:
+        print(f"Failed to query documents: {e}")
+        raise
+
+def test_rag_error_handling():
+    print("\nTesting RAG Error Handling...")
+    # Reset GroqProvider to ensure RAG is not initialized
+    global groq
+    groq = GroqProvider()
+    
+    try:
+        groq.query_documents("This should fail")
+    except ValueError as e:
+        print(f"Expected error caught: {e}")
+        assert str(e) == "RAG has not been initialized. Call initialize_rag first."
+    else:
+        raise AssertionError("Expected ValueError was not raised")
+
+    try:
+        groq.load_documents("This should also fail")
+    except ValueError as e:
+        print(f"Expected error caught: {e}")
+        assert str(e) == "RAG has not been initialized. Call initialize_rag first."
+    else:
+        raise AssertionError("Expected ValueError was not raised")
+    
+
+
 def display_menu():
     print("\nPocketGroq Test Menu:")
     print("1. Basic Chat Completion")
@@ -259,13 +353,18 @@ def display_menu():
     print("10. Chain of Thought Problem Solving")
     print("11. Chain of Thought Step Generation")
     print("12. Chain of Thought Synthesis")
-    print("13. Run All Tests")
+    print("13. Test RAG Initialization")
+    print("14. Test Document Loading")
+    print("15. Test Document Querying")
+    print("16. Test RAG Error Handling")
+    print("17. Run All RAG Tests")
+    print("18. Run All Tests")
     print("0. Exit")
 
 async def main():
     while True:
         display_menu()
-        choice = input("Enter your choice (0-13): ")
+        choice = input("Enter your choice (0-18): ")
         
         try:
             if choice == '0':
@@ -294,7 +393,23 @@ async def main():
                 test_cot_step_generation()
             elif choice == '12':
                 test_cot_synthesis()
+            
             elif choice == '13':
+                test_rag_initialization()
+            elif choice == '14':
+                test_document_loading()
+            elif choice == '15':
+                test_document_querying()
+            elif choice == '16':
+                test_rag_error_handling()
+            elif choice == '17':
+                test_rag_initialization()
+                test_document_loading()
+                test_document_querying()
+                test_rag_error_handling()
+                print("\nAll RAG tests completed successfully!")
+
+            elif choice == '18':
                 test_basic_chat_completion()
                 test_streaming_chat_completion()
                 test_override_default_model()
@@ -307,6 +422,10 @@ async def main():
                 test_cot_problem_solving()
                 test_cot_step_generation()
                 test_cot_synthesis()
+                test_rag_initialization()
+                test_document_loading()
+                test_document_querying()
+                test_rag_error_handling()
                 print("\nAll tests completed successfully!")
             else:
                 print("Invalid choice. Please try again.")

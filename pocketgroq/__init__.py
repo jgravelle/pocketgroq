@@ -5,5 +5,6 @@ from .exceptions import GroqAPIKeyMissingError, GroqAPIError
 from .config import get_api_key
 from .chain_of_thought.cot_manager import ChainOfThoughtManager
 from .chain_of_thought.llm_interface import LLMInterface
+from .rag_manager import RAGManager
 
-__all__ = ['GroqProvider', 'GroqAPIKeyMissingError', 'GroqAPIError', 'get_api_key', 'ChainOfThoughtManager', 'LLMInterface']
+__all__ = ['GroqProvider', 'GroqAPIKeyMissingError', 'GroqAPIError', 'get_api_key', 'ChainOfThoughtManager', 'LLMInterface', 'RAGManager']

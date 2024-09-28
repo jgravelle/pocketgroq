@@ -1,15 +1,19 @@
 # pocketgroq/groq_provider.py
 
+import asyncio
 import os
 import json
-from typing import Dict, Any, List, Union, AsyncIterator
-import asyncio
+import subprocess
 
 from groq import Groq, AsyncGroq
+from langchain_groq import ChatGroq
+from langchain_community.embeddings import OllamaEmbeddings
+from typing import Callable, Dict, Any, List, Union, AsyncIterator
 from .exceptions import GroqAPIKeyMissingError, GroqAPIError
 from .web_tool import WebTool
 from .chain_of_thought.cot_manager import ChainOfThoughtManager
 from .chain_of_thought.llm_interface import LLMInterface
+from .rag_manager import RAGManager
 
 class GroqProvider(LLMInterface):
     def __init__(self, api_key: str = None):
@@ -24,6 +28,11 @@ class GroqProvider(LLMInterface):
         ]
         self.web_tool = WebTool()
         self.cot_manager = ChainOfThoughtManager(llm=self)
+        self.rag_manager = None
+        self.tools = {} 
+
+    def register_tool(self, name: str, func: callable):
+        self.tools[name] = func
 
     def generate(self, prompt: str, **kwargs) -> Union[str, AsyncIterator[str]]:
         messages = [{"role": "user", "content": prompt}]
@@ -49,7 +58,7 @@ class GroqProvider(LLMInterface):
             completion_kwargs["response_format"] = {"type": "json_object"}
 
         if kwargs.get("tools"):
-            completion_kwargs["tools"] = kwargs["tools"]
+            completion_kwargs["tools"] = self._prepare_tools(kwargs["tools"])
             completion_kwargs["tool_choice"] = kwargs.get("tool_choice", "auto")
 
         if kwargs.get("async_mode", False):
@@ -64,6 +73,15 @@ class GroqProvider(LLMInterface):
             print(f"Warning: {requested_model} is not optimized for tool use. Switching to {self.tool_use_models[0]}.")
             return self.tool_use_models[0]
         return requested_model or os.environ.get('GROQ_MODEL', 'llama3-8b-8192')
+    
+    def _prepare_tools(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        prepared_tools = []
+        for tool in tools:
+            prepared_tool = tool.copy()
+            if 'function' in prepared_tool:
+                prepared_tool['function'] = {k: v for k, v in prepared_tool['function'].items() if k != 'implementation'}
+            prepared_tools.append(prepared_tool)
+        return prepared_tools
 
     def _sync_create_completion(self, **kwargs) -> Union[str, AsyncIterator[str]]:
         try:
@@ -97,9 +115,7 @@ class GroqProvider(LLMInterface):
                 "content": message.content,
                 "tool_calls": message.tool_calls,
             }
-            for result in tool_results:
-                new_message["tool_results"] = result
-            return self._create_completion([new_message])
+            return self._create_completion([new_message] + tool_results)
         return message.content
 
     async def _async_process_tool_calls(self, response) -> str:
@@ -119,20 +135,16 @@ class GroqProvider(LLMInterface):
     def _execute_tool_calls(self, tool_calls) -> List[Dict[str, Any]]:
         results = []
         for tool_call in tool_calls:
-            if tool_call.function.name == "web_search":
+            if tool_call.function.name in self.tools:
                 args = json.loads(tool_call.function.arguments)
-                result = self.web_tool.search(args.get("query", ""))
-            elif tool_call.function.name == "get_web_content":
-                args = json.loads(tool_call.function.arguments)
-                result = self.web_tool.get_web_content(args.get("url", ""))
+                result = self.tools[tool_call.function.name](**args)
             else:
                 result = {"error": f"Unknown tool: {tool_call.function.name}"}
             
             results.append({
-                "tool_call_id": tool_call.id,
                 "role": "tool",
-                "name": tool_call.function.name,
                 "content": json.dumps(result),
+                "tool_call_id": tool_call.id,
             })
         return results
 
@@ -185,3 +197,29 @@ class GroqProvider(LLMInterface):
         Synthesize a final answer from Chain of Thought steps.
         """
         return self.cot_manager.synthesize_response(cot_steps)
+    
+    def initialize_rag(self, ollama_base_url: str = "http://localhost:11434", model_name: str = "nomic-embed-text"):
+        try:
+            # Attempt to pull the model if it's not already available
+            subprocess.run(["ollama", "pull", model_name], check=True)
+        except subprocess.CalledProcessError:
+            print(f"Failed to pull model {model_name}. Ensure Ollama is installed and running.")
+            raise
+
+        embeddings = OllamaEmbeddings(base_url=ollama_base_url, model=model_name)
+        self.rag_manager = RAGManager(embeddings)
+
+    def load_documents(self, source: str, chunk_size: int = 1000, chunk_overlap: int = 200, 
+                       progress_callback: Callable[[int, int], None] = None, timeout: int = 300):
+        if not self.rag_manager:
+            raise ValueError("RAG has not been initialized. Call initialize_rag first.")
+        self.rag_manager.load_and_process_documents(source, chunk_size, chunk_overlap, progress_callback, timeout)
+
+
+    def query_documents(self, query: str, **kwargs) -> str:
+        if not self.rag_manager:
+            raise ValueError("RAG has not been initialized. Call initialize_rag first.")
+        
+        llm = ChatGroq(groq_api_key=self.api_key, model_name=kwargs.get("model", "llama3-8b-8192"))
+        response = self.rag_manager.query_documents(llm, query)
+        return response['answer']

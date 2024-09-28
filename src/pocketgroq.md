@@ -10,7 +10,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pocketgroq",
-    version="0.3.0",  # Increment the version number
+    version="0.4.0",  # Increment the version number
     author="PocketGroq Team",
     author_email="pocketgroq@example.com",
     description="A library for easy integration with Groq API, including image handling and Chain of Thought reasoning",
@@ -54,6 +54,10 @@ setup(
 import asyncio
 import json
 import logging
+import os
+import subprocess
+import tempfile
+
 from typing import List, Optional, Union
 from pydantic import BaseModel, Field, validator
 from pocketgroq import GroqProvider, GroqAPIKeyMissingError, GroqAPIError
@@ -241,11 +245,13 @@ def test_tool_usage():
                         }
                     },
                     "required": ["input_string"],
-                },
-                "implementation": reverse_string
+                }
             }
         }
     ]
+
+    # Register the tool implementation
+    groq.register_tool("reverse_string", reverse_string)
 
     response = groq.generate("Please reverse the string 'hello world'", tools=tools)
     print("Response:", response)
@@ -298,6 +304,94 @@ def test_cot_synthesis():
     print("Synthesized Answer:", final_answer)
     assert isinstance(final_answer, str) and len(final_answer) > 0
 
+def test_rag_initialization():
+    print("\nTesting RAG Initialization...")
+    try:
+        # Ensure Ollama is running
+        try:
+            subprocess.run(["ollama", "list"], check=True, capture_output=True)
+        except subprocess.CalledProcessError:
+            print("Ollama is not running. Please start Ollama service.")
+            return
+
+        groq.initialize_rag()  # Use default Ollama URL and model
+        print("RAG initialized successfully.")
+        assert groq.rag_manager is not None
+    except Exception as e:
+        print(f"Failed to initialize RAG: {e}")
+        raise
+
+def test_document_loading():
+    print("\nTesting Document Loading...")
+    try:
+        # Ensure RAG is initialized
+        if not groq.rag_manager:
+            groq.initialize_rag()
+
+        def progress_callback(current, total):
+            print(f"Processing document chunks: {current}/{total}")
+
+        # Create a temporary file with some content
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as temp_file:
+            temp_file.write("This is a test document about artificial intelligence and machine learning.")
+            temp_file_path = temp_file.name
+
+        groq.load_documents(temp_file_path, progress_callback=progress_callback, timeout=60)  # 1-minute timeout
+        print("Local document loaded successfully.")
+        assert groq.rag_manager.vector_store is not None
+
+        # Test loading from a URL with a shorter timeout
+        try:
+            groq.load_documents("https://en.wikipedia.org/wiki/Artificial_intelligence", 
+                                progress_callback=progress_callback, timeout=120)  # 2-minute timeout
+            print("Web document loaded successfully.")
+        except TimeoutError:
+            print("Web document loading timed out, but local document was processed successfully.")
+        
+        assert groq.rag_manager.vector_store is not None
+    except Exception as e:
+        print(f"Failed to load document: {e}")
+        raise
+    finally:
+        # Clean up the temporary file
+        os.unlink(temp_file_path)
+
+def test_document_querying():
+    print("\nTesting Document Querying...")
+    query = "What is the main topic of the document?"
+    try:
+        response = groq.query_documents(query)
+        print(f"Query: {query}")
+        print(f"Response: {response}")
+        assert isinstance(response, str) and len(response) > 0
+    except Exception as e:
+        print(f"Failed to query documents: {e}")
+        raise
+
+def test_rag_error_handling():
+    print("\nTesting RAG Error Handling...")
+    # Reset GroqProvider to ensure RAG is not initialized
+    global groq
+    groq = GroqProvider()
+    
+    try:
+        groq.query_documents("This should fail")
+    except ValueError as e:
+        print(f"Expected error caught: {e}")
+        assert str(e) == "RAG has not been initialized. Call initialize_rag first."
+    else:
+        raise AssertionError("Expected ValueError was not raised")
+
+    try:
+        groq.load_documents("This should also fail")
+    except ValueError as e:
+        print(f"Expected error caught: {e}")
+        assert str(e) == "RAG has not been initialized. Call initialize_rag first."
+    else:
+        raise AssertionError("Expected ValueError was not raised")
+    
+
+
 def display_menu():
     print("\nPocketGroq Test Menu:")
     print("1. Basic Chat Completion")
@@ -312,13 +406,18 @@ def display_menu():
     print("10. Chain of Thought Problem Solving")
     print("11. Chain of Thought Step Generation")
     print("12. Chain of Thought Synthesis")
-    print("13. Run All Tests")
+    print("13. Test RAG Initialization")
+    print("14. Test Document Loading")
+    print("15. Test Document Querying")
+    print("16. Test RAG Error Handling")
+    print("17. Run All RAG Tests")
+    print("18. Run All Tests")
     print("0. Exit")
 
 async def main():
     while True:
         display_menu()
-        choice = input("Enter your choice (0-13): ")
+        choice = input("Enter your choice (0-18): ")
         
         try:
             if choice == '0':
@@ -347,7 +446,23 @@ async def main():
                 test_cot_step_generation()
             elif choice == '12':
                 test_cot_synthesis()
+            
             elif choice == '13':
+                test_rag_initialization()
+            elif choice == '14':
+                test_document_loading()
+            elif choice == '15':
+                test_document_querying()
+            elif choice == '16':
+                test_rag_error_handling()
+            elif choice == '17':
+                test_rag_initialization()
+                test_document_loading()
+                test_document_querying()
+                test_rag_error_handling()
+                print("\nAll RAG tests completed successfully!")
+
+            elif choice == '18':
                 test_basic_chat_completion()
                 test_streaming_chat_completion()
                 test_override_default_model()
@@ -360,6 +475,10 @@ async def main():
                 test_cot_problem_solving()
                 test_cot_step_generation()
                 test_cot_synthesis()
+                test_rag_initialization()
+                test_document_loading()
+                test_document_querying()
+                test_rag_error_handling()
                 print("\nAll tests completed successfully!")
             else:
                 print("Invalid choice. Please try again.")
@@ -416,16 +535,20 @@ class GroqAPIError(Exception):
 ```python
 # pocketgroq/groq_provider.py
 
+import asyncio
 import os
 import json
-from typing import Dict, Any, List, Union, AsyncIterator
-import asyncio
+import subprocess
 
 from groq import Groq, AsyncGroq
+from langchain_groq import ChatGroq
+from langchain_community.embeddings import OllamaEmbeddings
+from typing import Callable, Dict, Any, List, Union, AsyncIterator
 from .exceptions import GroqAPIKeyMissingError, GroqAPIError
 from .web_tool import WebTool
 from .chain_of_thought.cot_manager import ChainOfThoughtManager
 from .chain_of_thought.llm_interface import LLMInterface
+from .rag_manager import RAGManager
 
 class GroqProvider(LLMInterface):
     def __init__(self, api_key: str = None):
@@ -440,6 +563,11 @@ class GroqProvider(LLMInterface):
         ]
         self.web_tool = WebTool()
         self.cot_manager = ChainOfThoughtManager(llm=self)
+        self.rag_manager = None
+        self.tools = {} 
+
+    def register_tool(self, name: str, func: callable):
+        self.tools[name] = func
 
     def generate(self, prompt: str, **kwargs) -> Union[str, AsyncIterator[str]]:
         messages = [{"role": "user", "content": prompt}]
@@ -465,7 +593,7 @@ class GroqProvider(LLMInterface):
             completion_kwargs["response_format"] = {"type": "json_object"}
 
         if kwargs.get("tools"):
-            completion_kwargs["tools"] = kwargs["tools"]
+            completion_kwargs["tools"] = self._prepare_tools(kwargs["tools"])
             completion_kwargs["tool_choice"] = kwargs.get("tool_choice", "auto")
 
         if kwargs.get("async_mode", False):
@@ -480,6 +608,15 @@ class GroqProvider(LLMInterface):
             print(f"Warning: {requested_model} is not optimized for tool use. Switching to {self.tool_use_models[0]}.")
             return self.tool_use_models[0]
         return requested_model or os.environ.get('GROQ_MODEL', 'llama3-8b-8192')
+    
+    def _prepare_tools(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        prepared_tools = []
+        for tool in tools:
+            prepared_tool = tool.copy()
+            if 'function' in prepared_tool:
+                prepared_tool['function'] = {k: v for k, v in prepared_tool['function'].items() if k != 'implementation'}
+            prepared_tools.append(prepared_tool)
+        return prepared_tools
 
     def _sync_create_completion(self, **kwargs) -> Union[str, AsyncIterator[str]]:
         try:
@@ -513,9 +650,7 @@ class GroqProvider(LLMInterface):
                 "content": message.content,
                 "tool_calls": message.tool_calls,
             }
-            for result in tool_results:
-                new_message["tool_results"] = result
-            return self._create_completion([new_message])
+            return self._create_completion([new_message] + tool_results)
         return message.content
 
     async def _async_process_tool_calls(self, response) -> str:
@@ -535,20 +670,16 @@ class GroqProvider(LLMInterface):
     def _execute_tool_calls(self, tool_calls) -> List[Dict[str, Any]]:
         results = []
         for tool_call in tool_calls:
-            if tool_call.function.name == "web_search":
+            if tool_call.function.name in self.tools:
                 args = json.loads(tool_call.function.arguments)
-                result = self.web_tool.search(args.get("query", ""))
-            elif tool_call.function.name == "get_web_content":
-                args = json.loads(tool_call.function.arguments)
-                result = self.web_tool.get_web_content(args.get("url", ""))
+                result = self.tools[tool_call.function.name](**args)
             else:
                 result = {"error": f"Unknown tool: {tool_call.function.name}"}
             
             results.append({
-                "tool_call_id": tool_call.id,
                 "role": "tool",
-                "name": tool_call.function.name,
                 "content": json.dumps(result),
+                "tool_call_id": tool_call.id,
             })
         return results
 
@@ -601,6 +732,100 @@ class GroqProvider(LLMInterface):
         Synthesize a final answer from Chain of Thought steps.
         """
         return self.cot_manager.synthesize_response(cot_steps)
+    
+    def initialize_rag(self, ollama_base_url: str = "http://localhost:11434", model_name: str = "nomic-embed-text"):
+        try:
+            # Attempt to pull the model if it's not already available
+            subprocess.run(["ollama", "pull", model_name], check=True)
+        except subprocess.CalledProcessError:
+            print(f"Failed to pull model {model_name}. Ensure Ollama is installed and running.")
+            raise
+
+        embeddings = OllamaEmbeddings(base_url=ollama_base_url, model=model_name)
+        self.rag_manager = RAGManager(embeddings)
+
+    def load_documents(self, source: str, chunk_size: int = 1000, chunk_overlap: int = 200, 
+                       progress_callback: Callable[[int, int], None] = None, timeout: int = 300):
+        if not self.rag_manager:
+            raise ValueError("RAG has not been initialized. Call initialize_rag first.")
+        self.rag_manager.load_and_process_documents(source, chunk_size, chunk_overlap, progress_callback, timeout)
+
+
+    def query_documents(self, query: str, **kwargs) -> str:
+        if not self.rag_manager:
+            raise ValueError("RAG has not been initialized. Call initialize_rag first.")
+        
+        llm = ChatGroq(groq_api_key=self.api_key, model_name=kwargs.get("model", "llama3-8b-8192"))
+        response = self.rag_manager.query_documents(llm, query)
+        return response['answer']
+```
+
+# pocketgroq\rag_manager.py
+
+```python
+from typing import List, Dict, Any, Callable
+from langchain_community.document_loaders import WebBaseLoader, TextLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_retrieval_chain
+import os
+import time
+
+class RAGManager:
+    def __init__(self, embeddings):
+        self.embeddings = embeddings
+        self.vector_store = None
+
+    def load_and_process_documents(self, source: str, chunk_size: int = 1000, chunk_overlap: int = 200, 
+                                   progress_callback: Callable[[int, int], None] = None, 
+                                   timeout: int = 300):  # 5 minutes timeout
+        start_time = time.time()
+        
+        if source.startswith(('http://', 'https://')):
+            loader = WebBaseLoader(source)
+        elif os.path.isfile(source):
+            loader = TextLoader(source)
+        else:
+            raise ValueError(f"Unsupported source: {source}. Must be a valid URL or file path.")
+
+        documents = loader.load()
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        split_documents = text_splitter.split_documents(documents)
+        
+        total_chunks = len(split_documents)
+        for i, doc in enumerate(split_documents):
+            if time.time() - start_time > timeout:
+                raise TimeoutError(f"Document processing exceeded the {timeout} seconds timeout.")
+            
+            if not self.vector_store:
+                self.vector_store = FAISS.from_documents([doc], self.embeddings)
+            else:
+                self.vector_store.add_documents([doc])
+            
+            if progress_callback:
+                progress_callback(i + 1, total_chunks)
+
+
+    def query_documents(self, llm, query: str) -> Dict[str, Any]:
+        if not self.vector_store:
+            raise ValueError("Documents have not been loaded. Call load_and_process_documents first.")
+
+        prompt = ChatPromptTemplate.from_template(
+            """
+            Answer the question based on the provided context only.
+            Provide the most accurate response based on the question.
+            <context>
+            {context}
+            </context>
+            Question: {input}
+            """
+        )
+        document_chain = create_stuff_documents_chain(llm, prompt)
+        retriever = self.vector_store.as_retriever()
+        retrieval_chain = create_retrieval_chain(retriever, document_chain)
+        return retrieval_chain.invoke({"input": query})
 ```
 
 # pocketgroq\utils.py
@@ -760,8 +985,9 @@ from .exceptions import GroqAPIKeyMissingError, GroqAPIError
 from .config import get_api_key
 from .chain_of_thought.cot_manager import ChainOfThoughtManager
 from .chain_of_thought.llm_interface import LLMInterface
+from .rag_manager import RAGManager
 
-__all__ = ['GroqProvider', 'GroqAPIKeyMissingError', 'GroqAPIError', 'get_api_key', 'ChainOfThoughtManager', 'LLMInterface']
+__all__ = ['GroqProvider', 'GroqAPIKeyMissingError', 'GroqAPIError', 'get_api_key', 'ChainOfThoughtManager', 'LLMInterface', 'RAGManager']
 ```
 
 # tests\test_groq_provider.py
@@ -976,6 +1202,120 @@ def sanitize_input(text: str) -> str:
     return sanitized.strip()
 ```
 
+# build\lib\chain_of_thought\cot_manager.py
+
+```python
+# pocketgroq/chain_of_thought/cot_manager.py
+
+from typing import List
+from .llm_interface import LLMInterface
+from .utils import sanitize_input
+
+class ChainOfThoughtManager:
+    """
+    Manages the Chain-of-Thought reasoning process.
+    """
+    def __init__(self, llm: LLMInterface, cot_prompt_template: str = None):
+        """
+        Initialize with an LLM instance and an optional CoT prompt template.
+        """
+        self.llm = llm
+        self.cot_prompt_template = cot_prompt_template or (
+            "Solve the following problem step by step:\n\n{problem}\n\nSolution:"
+        )
+
+    def generate_cot(self, problem: str) -> List[str]:
+        """
+        Generate intermediate reasoning steps (Chain-of-Thought) for the given problem.
+        """
+        sanitized_problem = sanitize_input(problem)
+        prompt = self.cot_prompt_template.format(problem=sanitized_problem)
+        response = self.llm.generate(prompt)
+        cot_steps = self._parse_cot(response)
+        return cot_steps
+
+    def synthesize_response(self, cot_steps: List[str]) -> str:
+        """
+        Synthesize the final answer from the Chain-of-Thought steps.
+        """
+        synthesis_prompt = "Based on the following reasoning steps, provide a concise answer:\n\n"
+        synthesis_prompt += "\n".join(cot_steps) + "\n\nAnswer:"
+        final_response = self.llm.generate(synthesis_prompt)
+        return final_response.strip()
+
+    def solve_problem(self, problem: str) -> str:
+        """
+        Complete process to solve a problem using Chain-of-Thought.
+        """
+        cot = self.generate_cot(problem)
+        answer = self.synthesize_response(cot)
+        return answer
+
+    def _parse_cot(self, response: str) -> List[str]:
+        """
+        Parse the LLM response to extract individual reasoning steps.
+        This method can be customized based on how the LLM formats its output.
+        """
+        # Simple split by newline for demonstration; can be enhanced.
+        steps = [line.strip() for line in response.split('\n') if line.strip()]
+        return steps
+```
+
+# build\lib\chain_of_thought\llm_interface.py
+
+```python
+# pocketgroq/chain_of_thought/llm_interface.py
+
+from abc import ABC, abstractmethod
+from typing import List
+
+class LLMInterface(ABC):
+    """
+    Abstract base class for LLM integrations.
+    """
+    @abstractmethod
+    def generate(self, prompt: str, max_tokens: int = 150) -> str:
+        """
+        Generate a response from the LLM based on the prompt.
+        """
+        pass
+
+    @abstractmethod
+    def set_api_key(self, api_key: str):
+        """
+        Set the API key for the LLM service.
+        """
+        pass
+```
+
+# build\lib\chain_of_thought\utils.py
+
+```python
+# pocketgroq/chain_of_thought/utils.py
+
+import re
+
+def sanitize_input(text: str) -> str:
+    """
+    Sanitize user input to prevent injection attacks or unwanted content.
+    """
+    # Remove potentially harmful characters or patterns
+    sanitized = re.sub(r'[<>]', '', text)
+    return sanitized.strip()
+```
+
+# build\lib\chain_of_thought\__init__.py
+
+```python
+# pocketgroq/chain_of_thought/__init__.py
+
+from .cot_manager import ChainOfThoughtManager
+from .llm_interface import LLMInterface
+from .utils import sanitize_input
+
+__all__ = ['ChainOfThoughtManager', 'LLMInterface', 'sanitize_input']
+```
+
 # build\lib\pocketgroq\config.py
 
 ```python
@@ -1024,23 +1364,34 @@ import asyncio
 from groq import Groq, AsyncGroq
 from .exceptions import GroqAPIKeyMissingError, GroqAPIError
 from .web_tool import WebTool
+from .chain_of_thought.cot_manager import ChainOfThoughtManager
+from .chain_of_thought.llm_interface import LLMInterface
 
-class GroqProvider:
+class GroqProvider(LLMInterface):
     def __init__(self, api_key: str = None):
         self.api_key = api_key or os.environ.get("GROQ_API_KEY")
         if not self.api_key:
             raise GroqAPIKeyMissingError("Groq API key is not provided")
         self.client = Groq(api_key=self.api_key)
         self.async_client = AsyncGroq(api_key=self.api_key)
-        self.tool_use_models = [
-            "llama3-groq-70b-8192-tool-use-preview",
-            "llama3-groq-8b-8192-tool-use-preview"
-        ]
-        self.web_tool = WebTool()
+        self.cot_manager = ChainOfThoughtManager(llm=self)
 
-    def generate(self, prompt: str, **kwargs) -> Union[str, AsyncIterator[str]]:
-        messages = [{"role": "user", "content": prompt}]
-        return self._create_completion(messages, **kwargs)
+    def generate(self, prompt: str, **kwargs) -> str:
+        try:
+            response = self.client.chat.completions.create(
+                model=kwargs.get("model", "llama2-70b-4096"),
+                messages=[{"role": "user", "content": prompt}],
+                temperature=kwargs.get("temperature", 0.5),
+                max_tokens=kwargs.get("max_tokens", 1024),
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            raise GroqAPIError(f"Error in Groq API call: {str(e)}")
+
+    def set_api_key(self, api_key: str):
+        self.api_key = api_key
+        self.client = Groq(api_key=self.api_key)
+        self.async_client = AsyncGroq(api_key=self.api_key)
 
     def _create_completion(self, messages: List[Dict[str, str]], **kwargs) -> Union[str, AsyncIterator[str]]:
         completion_kwargs = {
@@ -1175,6 +1526,15 @@ class GroqProvider:
     def is_url(self, text: str) -> bool:
         """Check if the given text is a valid URL using the integrated WebTool."""
         return self.web_tool.is_url(text)
+    
+    def generate_and_execute_cot(self, problem: str, **kwargs) -> List[str]:
+        return self.cot_manager.generate_and_execute_cot(problem)
+
+    def synthesize_cot(self, cot_steps: List[str], **kwargs) -> str:
+        return self.cot_manager.synthesize_response(cot_steps)
+
+    def solve_problem_with_cot(self, problem: str, **kwargs) -> str:
+        return self.cot_manager.solve_problem(problem)
 ```
 
 # build\lib\pocketgroq\utils.py
@@ -1327,11 +1687,245 @@ class WebTool:
 # build\lib\pocketgroq\__init__.py
 
 ```python
+# pocketgroq/__init__.py
+
 from .groq_provider import GroqProvider
 from .exceptions import GroqAPIKeyMissingError, GroqAPIError
 from .config import get_api_key
-    
+from .chain_of_thought.cot_manager import ChainOfThoughtManager
+from .chain_of_thought.llm_interface import LLMInterface
 
-__all__ = ['GroqProvider', 'GroqAPIKeyMissingError', 'GroqAPIError', 'get_api_key']
+__all__ = ['GroqProvider', 'GroqAPIKeyMissingError', 'GroqAPIError', 'get_api_key', 'ChainOfThoughtManager', 'LLMInterface']
+```
+
+# build\lib\pocketgroq\chain_of_thought\cot_manager.py
+
+```python
+# pocketgroq/chain_of_thought/cot_manager.py
+
+from typing import List, Optional
+from .llm_interface import LLMInterface
+from .utils import sanitize_input, validate_cot_steps
+import logging
+
+# Configure logging for debugging and monitoring
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class ChainOfThoughtManager:
+    """
+    Manages the Chain-of-Thought reasoning process with enhanced prompting
+    to ensure robustness, precision, and efficiency.
+    """
+
+    def __init__(self, llm: LLMInterface, cot_prompt_template: Optional[str] = None):
+        """
+        Initialize with an LLM instance and an optional CoT prompt template.
+
+        Args:
+            llm (LLMInterface): An instance of a class that implements the LLMInterface.
+            cot_prompt_template (str, optional): Custom template for generating CoT prompts.
+                                                  If None, a default robust template is used.
+        """
+        self.llm = llm
+        self.cot_prompt_template = cot_prompt_template or self._default_cot_prompt()
+        logger.debug("Initialized ChainOfThoughtManager with custom prompt template.")
+
+    def _default_cot_prompt(self) -> str:
+        """
+        Provides a robust default Chain-of-Thought prompt template.
+
+        Returns:
+            str: The default prompt template.
+        """
+        return (
+            "You are an expert problem solver. Carefully analyze the following problem and provide a detailed, step-by-step reasoning process leading to the solution.\n\n"
+            "Problem: {problem}\n\n"
+            "Solution Steps:"
+        )
+
+    def generate_cot(self, problem: str) -> List[str]:
+        """
+        Generate intermediate reasoning steps (Chain-of-Thought) for the given problem.
+
+        Args:
+            problem (str): The problem statement to solve.
+
+        Returns:
+            List[str]: A list of reasoning steps.
+        """
+        sanitized_problem = sanitize_input(problem)
+        prompt = self.cot_prompt_template.format(problem=sanitized_problem)
+        logger.debug(f"Generated prompt for CoT: {prompt}")
+
+        response = self.llm.generate(prompt)
+        logger.debug(f"Received response from LLM: {response}")
+
+        cot_steps = self._parse_cot(response)
+        logger.info(f"Generated {len(cot_steps)} reasoning steps.")
+
+        # Validate the extracted CoT steps
+        if not validate_cot_steps(cot_steps):
+            logger.warning("Validation failed for the extracted CoT steps.")
+            raise ValueError("Invalid Chain-of-Thought steps extracted from LLM response.")
+
+        return cot_steps
+
+    def synthesize_response(self, cot_steps: List[str]) -> str:
+        """
+        Synthesize the final answer from the Chain-of-Thought steps.
+
+        Args:
+            cot_steps (List[str]): A list of reasoning steps.
+
+        Returns:
+            str: The final synthesized answer.
+        """
+        synthesis_prompt = (
+            "Based on the following detailed reasoning steps, provide a clear and concise answer to the original problem.\n\n"
+            "Reasoning Steps:\n"
+            + "\n".join([f"{idx + 1}. {step}" for idx, step in enumerate(cot_steps)]) +
+            "\n\nAnswer:"
+        )
+        logger.debug(f"Synthesis prompt: {synthesis_prompt}")
+
+        final_response = self.llm.generate(synthesis_prompt, max_tokens=200)
+        logger.debug(f"Received synthesized answer: {final_response}")
+
+        answer = final_response.strip()
+
+        # Basic validation to ensure an answer was generated
+        if not answer:
+            logger.error("No answer generated during synthesis.")
+            raise ValueError("Failed to generate a synthesized answer from CoT steps.")
+
+        return answer
+
+    def solve_problem(self, problem: str) -> str:
+        """
+        Complete process to solve a problem using Chain-of-Thought.
+
+        Args:
+            problem (str): The problem statement to solve.
+
+        Returns:
+            str: The final answer to the problem.
+        """
+        logger.info(f"Solving problem: {problem}")
+        try:
+            cot = self.generate_cot(problem)
+            answer = self.synthesize_response(cot)
+            logger.info("Problem solved successfully.")
+            return answer
+        except Exception as e:
+            logger.error(f"An error occurred while solving the problem: {e}")
+            raise
+
+    def _parse_cot(self, response: str) -> List[str]:
+        """
+        Parse the LLM response to extract individual reasoning steps.
+        Enhanced to handle various formatting styles for robustness.
+
+        Args:
+            response (str): The raw response from the LLM.
+
+        Returns:
+            List[str]: A list of extracted reasoning steps.
+        """
+        steps = []
+        logger.debug("Parsing Chain-of-Thought steps from response.")
+
+        # Attempt to parse numbered or bulleted lists
+        lines = response.split('\n')
+        for line in lines:
+            # Match patterns like "1. Step one" or "- Step one" or "* Step one"
+            if line.strip().startswith(('1.', '2.', '3.', '4.', '5.', '-', '*')):
+                # Remove leading numbering or bullets
+                step = line.strip().lstrip('1234567890.').lstrip('-*').strip()
+                if step:
+                    steps.append(step)
+            else:
+                # If no clear list formatting, consider the entire response as a single step
+                if not steps and line.strip():
+                    steps.append(line.strip())
+
+        logger.debug(f"Extracted steps: {steps}")
+        return steps
+
+```
+
+# build\lib\pocketgroq\chain_of_thought\llm_interface.py
+
+```python
+# pocketgroq/chain_of_thought/llm_interface.py
+
+from abc import ABC, abstractmethod
+from typing import List
+
+class LLMInterface(ABC):
+    """
+    Abstract base class for LLM integrations.
+    """
+    @abstractmethod
+    def generate(self, prompt: str, max_tokens: int = 150) -> str:
+        """
+        Generate a response from the LLM based on the prompt.
+        """
+        pass
+
+    @abstractmethod
+    def set_api_key(self, api_key: str):
+        """
+        Set the API key for the LLM service.
+        """
+        pass
+```
+
+# build\lib\pocketgroq\chain_of_thought\utils.py
+
+```python
+# pocketgroq/chain_of_thought/utils.py
+
+import re
+from typing import List
+
+def sanitize_input(text: str) -> str:
+    """
+    Sanitize user input to prevent injection attacks or unwanted content.
+    """
+    # Remove potentially harmful characters or patterns
+    sanitized = re.sub(r'[<>]', '', text)
+    return sanitized.strip()
+
+def validate_cot_steps(steps: List[str], min_steps: int = 3) -> bool:
+    """
+    Validates the extracted Chain-of-Thought steps.
+
+    Args:
+        steps (List[str]): The list of reasoning steps.
+        min_steps (int, optional): Minimum number of steps required. Defaults to 3.
+
+    Returns:
+        bool: True if validation passes, False otherwise.
+    """
+    if len(steps) < min_steps:
+        return False
+    for step in steps:
+        if not step or len(step) < 5:  # Example criteria
+            return False
+    return True
+
+```
+
+# build\lib\pocketgroq\chain_of_thought\__init__.py
+
+```python
+# pocketgroq/chain_of_thought/__init__.py
+
+from .cot_manager import ChainOfThoughtManager
+from .llm_interface import LLMInterface
+from .utils import sanitize_input
+
+__all__ = ['ChainOfThoughtManager', 'LLMInterface', 'sanitize_input']
 ```
 
