@@ -1,19 +1,35 @@
+# test.py
+
 import asyncio
 import json
 import logging
 import os
 import subprocess
 import tempfile
+import uuid
 
 from typing import List, Optional, Union
 from pydantic import BaseModel, Field, validator
 from pocketgroq import GroqProvider, GroqAPIKeyMissingError, GroqAPIError
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+DEBUG = False
+logging.basicConfig(level=logging.FATAL)
+if DEBUG:
+    logger = logging.getLogger(__name__)
 
-# Initialize the GroqProvider
-groq = GroqProvider()
+# Initialize the GroqProvider with RAG persistence enabled by default
+groq = GroqProvider(rag_persistent=True, rag_index_path="faiss_persistent_index.pkl")
+
+# Generate a unique session ID for testing persistent conversations
+PERSISTENT_SESSION_ID = str(uuid.uuid4())
+DISPOSABLE_SESSION_ID = str(uuid.uuid4())
+
+def start_conversations():
+    """
+    Initialize conversation sessions for persistent and disposable modes.
+    """
+    groq.start_conversation(PERSISTENT_SESSION_ID)
+    groq.start_conversation(DISPOSABLE_SESSION_ID)
 
 def test_basic_chat_completion():
     print("Testing Basic Chat Completion...")
@@ -26,7 +42,7 @@ def test_basic_chat_completion():
         stop=None,
         stream=False
     )
-    print(response)
+    print("Response:", response)
     assert isinstance(response, str) and len(response) > 0
 
 def test_streaming_chat_completion():
@@ -69,7 +85,7 @@ def test_chat_completion_with_stop_sequence():
         stop=", 6",
         stream=False
     )
-    print(response)
+    print("Response:", response)
     assert isinstance(response, str) and "5" in response and "6" not in response
 
 async def test_async_generation():
@@ -83,7 +99,7 @@ async def test_async_generation():
         stop=None,
         async_mode=True
     )
-    print(response)
+    print("Response:", response)
     assert isinstance(response, str) and len(response) > 0
 
 async def test_streaming_async_chat_completion():
@@ -213,7 +229,7 @@ def test_vision():
         model="llava-v1.5-7b-4096-preview",
         image_url=image_url
     )
-    print(response_url)
+    print("Response:", response_url)
     assert isinstance(response_url, str) and len(response_url) > 0
 
 def test_cot_problem_solving():
@@ -268,13 +284,11 @@ def test_rag_initialization():
         print(f"Failed to initialize RAG: {e}")
         raise
 
-def test_document_loading():
-    print("\nTesting Document Loading...")
+def test_document_loading(persistent: bool = True):
+    mode = "Persistent" if persistent else "Disposable"
+    print(f"\nTesting Document Loading in {mode} Mode...")
     try:
-        # Ensure RAG is initialized
-        if not groq.rag_manager:
-            groq.initialize_rag()
-
+        # Load documents with specified persistence
         def progress_callback(current, total):
             print(f"Processing document chunks: {current}/{total}")
 
@@ -283,14 +297,14 @@ def test_document_loading():
             temp_file.write("This is a test document about artificial intelligence and machine learning.")
             temp_file_path = temp_file.name
 
-        groq.load_documents(temp_file_path, progress_callback=progress_callback, timeout=60)  # 1-minute timeout
+        groq.load_documents(temp_file_path, progress_callback=progress_callback, timeout=60, persistent=persistent)  # 1-minute timeout
         print("Local document loaded successfully.")
         assert groq.rag_manager.vector_store is not None
 
         # Test loading from a URL with a shorter timeout
         try:
             groq.load_documents("https://en.wikipedia.org/wiki/Artificial_intelligence", 
-                                progress_callback=progress_callback, timeout=120)  # 2-minute timeout
+                                progress_callback=progress_callback, timeout=120, persistent=persistent)  # 2-minute timeout
             print("Web document loaded successfully.")
         except TimeoutError:
             print("Web document loading timed out, but local document was processed successfully.")
@@ -319,7 +333,7 @@ def test_rag_error_handling():
     print("\nTesting RAG Error Handling...")
     # Reset GroqProvider to ensure RAG is not initialized
     global groq
-    groq = GroqProvider()
+    groq = GroqProvider(rag_persistent=False)  # Initialize without RAG persistence
     
     try:
         groq.query_documents("This should fail")
@@ -336,8 +350,48 @@ def test_rag_error_handling():
         assert str(e) == "RAG has not been initialized. Call initialize_rag first."
     else:
         raise AssertionError("Expected ValueError was not raised")
-    
 
+def test_persistent_conversation():
+    print("\nTesting Persistent Conversation...")
+    session_id = PERSISTENT_SESSION_ID
+    # Ensure the session is started
+    groq.start_conversation(session_id)
+    
+    # First user message
+    user_message1 = "What is the capital of Ohio?"
+    response1 = groq.generate(prompt=user_message1, session_id=session_id)
+    print(f"User: {user_message1}")
+    print(f"PG: {response1}")
+    assert isinstance(response1, str) and len(response1) > 0
+
+    # Second user message, expecting context-aware response
+    user_message2 = "What is its population?"
+    response2 = groq.generate(prompt=user_message2, session_id=session_id)
+    print(f"\nUser: {user_message2}")
+    print(f"PG: {response2}")
+    assert isinstance(response2, str) and len(response2) > 0
+
+def test_disposable_conversation():
+    print("\nTesting Disposable Conversation...")
+    session_id = DISPOSABLE_SESSION_ID
+    # Ensure the session is started
+    groq.start_conversation(session_id)
+    
+    # First user message
+    user_message1 = "What is the capital of Ohio?"
+    response1 = groq.generate(prompt=user_message1, session_id=session_id)
+    print(f"User: {user_message1}")
+    print(f"PG: {response1}")
+    assert isinstance(response1, str) and len(response1) > 0
+
+    # Second user message, expecting non-context-aware response
+    user_message2 = "What is its population?"
+    # Reset the conversation to make it disposable
+    groq.reset_conversation(session_id)
+    response2 = groq.generate(prompt=user_message2, session_id=session_id)
+    print(f"\nUser: {user_message2}")
+    print(f"PG: {response2}")
+    assert isinstance(response2, str) and len(response2) > 0
 
 def display_menu():
     print("\nPocketGroq Test Menu:")
@@ -357,14 +411,20 @@ def display_menu():
     print("14. Test Document Loading")
     print("15. Test Document Querying")
     print("16. Test RAG Error Handling")
-    print("17. Run All RAG Tests")
-    print("18. Run All Tests")
+    print("17. Test Persistent Conversation")
+    print("18. Test Disposable Conversation")
+    print("19. Run All RAG Tests")
+    print("20. Run All Conversation Tests")
+    print("21. Run All Tests")
     print("0. Exit")
 
 async def main():
+    # Start conversation sessions
+    start_conversations()
+    
     while True:
         display_menu()
-        choice = input("Enter your choice (0-18): ")
+        choice = input("Enter your choice (0-21): ")
         
         try:
             if choice == '0':
@@ -393,23 +453,29 @@ async def main():
                 test_cot_step_generation()
             elif choice == '12':
                 test_cot_synthesis()
-            
             elif choice == '13':
                 test_rag_initialization()
             elif choice == '14':
-                test_document_loading()
+                test_document_loading(persistent=True)
             elif choice == '15':
                 test_document_querying()
             elif choice == '16':
                 test_rag_error_handling()
             elif choice == '17':
+                test_persistent_conversation()
+            elif choice == '18':
+                test_disposable_conversation()
+            elif choice == '19':
                 test_rag_initialization()
-                test_document_loading()
+                test_document_loading(persistent=True)
                 test_document_querying()
                 test_rag_error_handling()
                 print("\nAll RAG tests completed successfully!")
-
-            elif choice == '18':
+            elif choice == '20':
+                test_persistent_conversation()
+                test_disposable_conversation()
+                print("\nAll Conversation tests completed successfully!")
+            elif choice == '21':
                 test_basic_chat_completion()
                 test_streaming_chat_completion()
                 test_override_default_model()
@@ -423,9 +489,11 @@ async def main():
                 test_cot_step_generation()
                 test_cot_synthesis()
                 test_rag_initialization()
-                test_document_loading()
+                test_document_loading(persistent=True)
                 test_document_querying()
                 test_rag_error_handling()
+                test_persistent_conversation()
+                test_disposable_conversation()
                 print("\nAll tests completed successfully!")
             else:
                 print("Invalid choice. Please try again.")
@@ -433,6 +501,8 @@ async def main():
             print(f"Error: {e}")
         except GroqAPIError as e:
             print(f"API Error: {e}")
+        except AssertionError as e:
+            print(f"Assertion Error: {e}")
         except Exception as e:
             print(f"Unexpected error: {e}")
         

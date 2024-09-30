@@ -4,7 +4,6 @@ import requests
 from bs4 import BeautifulSoup
 from typing import Dict, Any, List
 from urllib.parse import urlparse, quote_plus
-import os
 
 DEBUG = False  # Set to True for debugging
 

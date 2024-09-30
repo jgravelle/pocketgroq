@@ -1,22 +1,27 @@
 # pocketgroq/groq_provider.py
 
 import asyncio
-import os
 import json
+import logging
+import os
 import subprocess
 
+from collections import defaultdict
 from groq import Groq, AsyncGroq
 from langchain_groq import ChatGroq
 from langchain_community.embeddings import OllamaEmbeddings
-from typing import Callable, Dict, Any, List, Union, AsyncIterator
+from typing import Callable, Dict, Any, List, Union, AsyncIterator, Optional
+
 from .exceptions import GroqAPIKeyMissingError, GroqAPIError
 from .web_tool import WebTool
 from .chain_of_thought.cot_manager import ChainOfThoughtManager
 from .chain_of_thought.llm_interface import LLMInterface
 from .rag_manager import RAGManager
 
+logger = logging.getLogger(__name__)
+
 class GroqProvider(LLMInterface):
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str = None, rag_persistent: bool = True, rag_index_path: str = "faiss_index.pkl"):
         self.api_key = api_key or os.environ.get("GROQ_API_KEY")
         if not self.api_key:
             raise GroqAPIKeyMissingError("Groq API key is not provided")
@@ -29,14 +34,82 @@ class GroqProvider(LLMInterface):
         self.web_tool = WebTool()
         self.cot_manager = ChainOfThoughtManager(llm=self)
         self.rag_manager = None
-        self.tools = {} 
+        self.tools = {}
+        self.rag_persistent = rag_persistent
+        self.rag_index_path = rag_index_path
+
+        # Initialize RAG with persistence if enabled
+        if self.rag_persistent:
+            logger.info("Initializing RAG with persistence enabled.")
+            self.initialize_rag(index_path=self.rag_index_path)
+        
+        # Initialize conversation sessions
+        self.conversation_sessions = defaultdict(list)  # session_id -> list of messages
 
     def register_tool(self, name: str, func: callable):
         self.tools[name] = func
 
-    def generate(self, prompt: str, **kwargs) -> Union[str, AsyncIterator[str]]:
-        messages = [{"role": "user", "content": prompt}]
-        return self._create_completion(messages, **kwargs)
+    def end_conversation(self, conversation_id: str):
+        """
+        Ends a conversation and clears its history.
+
+        Args:
+            conversation_id (str): The ID of the conversation to end.
+        """
+        if conversation_id in self.conversations:
+            del self.conversations[conversation_id]
+            logger.info(f"Ended conversation with ID: {conversation_id}")
+        else:
+            logger.warning(f"Attempted to end non-existent conversation ID: {conversation_id}")
+
+    def get_conversation_history(self, session_id: str) -> List[Dict[str, str]]:
+        """
+        Retrieve the conversation history for a given session.
+
+        Args:
+            session_id (str): Unique identifier for the conversation session.
+
+        Returns:
+            List[Dict[str, str]]: List of messages in the conversation.
+        """
+        return self.conversation_sessions.get(session_id, [])            
+
+    def start_conversation(self, session_id: str):
+        """
+        Initialize a new conversation session.
+
+        Args:
+            session_id (str): Unique identifier for the conversation session.
+        """
+        if session_id in self.conversation_sessions:
+            logger.warning(f"Session '{session_id}' already exists. Overwriting.")
+        self.conversation_sessions[session_id] = []
+        logger.info(f"Started new conversation session '{session_id}'.")
+    
+    def reset_conversation(self, session_id: str):
+        if session_id in self.conversation_sessions:
+            del self.conversation_sessions[session_id]
+            logger.info(f"Conversation session '{session_id}' has been reset.")
+        else:
+            logger.warning(f"Attempted to reset non-existent session '{session_id}'.")   
+
+    def generate(self, prompt: str, session_id: Optional[str] = None, **kwargs) -> Union[str, AsyncIterator[str]]:
+        if session_id:
+            messages = self.conversation_sessions[session_id]
+            messages.append({"role": "user", "content": prompt})
+        else:
+            messages = [{"role": "user", "content": prompt}]
+
+        response = self._create_completion(messages, **kwargs)
+
+        if session_id:
+            if isinstance(response, str):
+                self.conversation_sessions[session_id].append({"role": "assistant", "content": response})
+            elif asyncio.iscoroutine(response):
+                # Handle asynchronous streaming responses if needed
+                pass
+
+        return response
 
     def set_api_key(self, api_key: str):
         self.api_key = api_key
@@ -198,25 +271,41 @@ class GroqProvider(LLMInterface):
         """
         return self.cot_manager.synthesize_response(cot_steps)
     
-    def initialize_rag(self, ollama_base_url: str = "http://localhost:11434", model_name: str = "nomic-embed-text"):
+    def initialize_rag(self, ollama_base_url: str = "http://localhost:11434", model_name: str = "nomic-embed-text", index_path: str = "faiss_index.pkl"):
         try:
             # Attempt to pull the model if it's not already available
             subprocess.run(["ollama", "pull", model_name], check=True)
         except subprocess.CalledProcessError:
-            print(f"Failed to pull model {model_name}. Ensure Ollama is installed and running.")
+            logger.error(f"Failed to pull model {model_name}. Ensure Ollama is installed and running.")
             raise
 
         embeddings = OllamaEmbeddings(base_url=ollama_base_url, model=model_name)
-        self.rag_manager = RAGManager(embeddings)
+        self.rag_manager = RAGManager(embeddings, index_path=index_path)
+        logger.info("RAG initialized successfully.")
 
     def load_documents(self, source: str, chunk_size: int = 1000, chunk_overlap: int = 200, 
-                       progress_callback: Callable[[int, int], None] = None, timeout: int = 300):
+                       progress_callback: Callable[[int, int], None] = None, timeout: int = 300, 
+                       persistent: bool = None):
+        if persistent is None:
+            persistent = self.rag_persistent
         if not self.rag_manager:
             raise ValueError("RAG has not been initialized. Call initialize_rag first.")
+
+        # Use a separate index path if non-persistent
+        index_path = self.rag_index_path if persistent else f"temp_{self.rag_index_path}"
+        self.rag_manager.index_path = index_path
+
         self.rag_manager.load_and_process_documents(source, chunk_size, chunk_overlap, progress_callback, timeout)
 
 
-    def query_documents(self, query: str, **kwargs) -> str:
+        # Use a separate index path if non-persistent
+        index_path = self.rag_index_path if persistent else f"temp_{self.rag_index_path}"
+        self.rag_manager.index_path = index_path
+
+        self.rag_manager.load_and_process_documents(source, chunk_size, chunk_overlap, progress_callback, timeout)
+
+
+    def query_documents(self, query: str, session_id: Optional[str] = None, **kwargs) -> str:
         if not self.rag_manager:
             raise ValueError("RAG has not been initialized. Call initialize_rag first.")
         

@@ -4,6 +4,7 @@ pocketgroq/__init__.py
 pocketgroq/config.py
 pocketgroq/exceptions.py
 pocketgroq/groq_provider.py
+pocketgroq/rag_manager.py
 pocketgroq/utils.py
 pocketgroq/web_tool.py
 pocketgroq.egg-info/PKG-INFO

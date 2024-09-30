@@ -1,21 +1,158 @@
-# PocketGroq v0.4.1
-
-PocketGroq provides a simpler interface to interact with the Groq API, aiding in rapid development by abstracting complex API calls into simple functions. Version 0.4.1 introduces powerful Retrieval-Augmented Generation (RAG) capabilities, enhancing its ability to provide context-aware responses. It also includes a WebTool for web searches and content retrieval, and Chain of Thought (CoT) reasoning capabilities, making it even more versatile for complex problem-solving tasks.
-
+# PocketGroq v0.4.2: Now with Conversation Persistence and Enhanced RAG!
 ![PocketGroq Logo](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
 
-## What's New in v0.4.1
+PocketGroq has been upgraded to version 0.4.2, introducing powerful conversation persistence and enhanced Retrieval-Augmented Generation (RAG) capabilities. These major updates significantly improve PocketGroq's ability to maintain context across interactions and provide more accurate, context-aware responses.
 
-- **Retrieval-Augmented Generation (RAG)**: Enhance responses with context from external documents and web pages. (Requires Ollama server for embeddings)
-- **Improved Document Handling**: Load and query both local and web-based documents.
-- **Context-Aware Generation**: Generate responses that leverage loaded document context.
+## New Persistence Features
+
+### Conversation Persistence
+
+PocketGroq now supports maintaining conversation history across multiple interactions, allowing for more coherent and context-aware dialogues.
+
+#### Simple Usage:
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+
+# Start a new conversation
+session_id = "user_123"
+groq.start_conversation(session_id)
+
+# First interaction
+response1 = groq.generate("What is the capital of France?", session_id=session_id)
+print("Response 1:", response1)
+
+# Second interaction (context-aware)
+response2 = groq.generate("What is its population?", session_id=session_id)
+print("Response 2:", response2)
+
+# End the conversation when done
+groq.end_conversation(session_id)
+```
+
+#### Advanced Usage:
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+
+def chat_session(topic):
+    session_id = f"chat_{topic}"
+    groq.start_conversation(session_id)
+    
+    print(f"Starting chat session about {topic}")
+    
+    while True:
+        user_input = input("You: ")
+        if user_input.lower() == 'exit':
+            break
+        
+        response = groq.generate(user_input, session_id=session_id)
+        print("AI:", response)
+    
+    groq.end_conversation(session_id)
+    print("Chat session ended")
+
+# Example usage
+chat_session("space exploration")
+```
+
+### Enhanced RAG with Persistence
+
+PocketGroq's RAG capabilities now support persistent storage of document embeddings, allowing for faster querying and reduced processing time for repeated operations.
+
+#### Simple Usage:
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider(rag_persistent=True, rag_index_path="my_persistent_index.pkl")
+
+# Initialize RAG
+groq.initialize_rag()
+
+# Load documents (will be stored persistently)
+groq.load_documents("https://en.wikipedia.org/wiki/Artificial_intelligence")
+groq.load_documents("path/to/local/document.txt")
+
+# Query documents
+query = "What are the main applications of AI?"
+response = groq.query_documents(query)
+print(response)
+```
+
+#### Advanced Usage: Research Assistant
+
+```python
+from pocketgroq import GroqProvider
+
+class ResearchAssistant:
+    def __init__(self):
+        self.groq = GroqProvider(rag_persistent=True, rag_index_path="research_index.pkl")
+        self.groq.initialize_rag()
+
+    def load_source(self, source):
+        print(f"Loading source: {source}")
+        self.groq.load_documents(source)
+
+    def research(self, topic):
+        print(f"Researching: {topic}")
+        query = f"Provide a comprehensive summary of {topic} based on the loaded documents."
+        response = self.groq.query_documents(query)
+        return response
+
+    def generate_report(self, topic, research_summary):
+        prompt = f"Based on this research summary about {topic}, generate a detailed report:\n\n{research_summary}"
+        report = self.groq.generate(prompt, max_tokens=2000)
+        return report
+
+# Example usage
+assistant = ResearchAssistant()
+
+# Load multiple sources
+assistant.load_source("https://en.wikipedia.org/wiki/Climate_change")
+assistant.load_source("https://www.ipcc.ch/reports/")
+assistant.load_source("path/to/local/climate_study.pdf")
+
+# Perform research
+topic = "Impact of climate change on biodiversity"
+research_summary = assistant.research(topic)
+print("\nResearch Summary:")
+print(research_summary)
+
+# Generate a report
+report = assistant.generate_report(topic, research_summary)
+print("\nGenerated Report:")
+print(report)
+```
+
+## Benefits of New Persistence Features
+
+1. **Improved Context Awareness**: Conversation persistence allows for more natural, context-aware dialogues across multiple interactions.
+2. **Efficient Information Retrieval**: Persistent RAG reduces processing time for repeated queries on the same document set.
+3. **Enhanced User Experience**: Maintain coherent conversations and provide more accurate, contextually relevant responses.
+4. **Scalability**: Handle complex, multi-turn conversations and large document sets more effectively.
+5. **Flexibility**: Choose between persistent and non-persistent modes based on your application's needs.
+
+Upgrade to PocketGroq v0.4.2 today to leverage these powerful new persistence capabilities in your projects!
+
+## What's New in v0.4.2
+
+- **Conversation Persistence**: Maintain context across multiple interactions for more coherent dialogues.
+- **Enhanced Retrieval-Augmented Generation (RAG)**: Improve response accuracy with persistent document context.
+- **Improved Document Handling**: Load and query both local and web-based documents with persistent storage options.
+- **Context-Aware Generation**: Generate responses that leverage both conversation history and loaded document context.
 - **Ollama Integration**: Utilizes Ollama for efficient, locally-generated embeddings in RAG functionality.
 
-For full details on the new RAG features and Ollama setup, see the [RAG Features](#rag-features) and [Ollama Server Requirement for RAG](#ollama-server-requirement-for-rag) sections below.
+For full details on the new persistence features and RAG enhancements, see the [Persistence Features](#persistence-features) and [RAG Features](#rag-features) sections below.
 
-# PocketGroq v0.4.1: Now with Retrieval-Augmented Generation (RAG)!
 
-PocketGroq has been upgraded to version 0.4.1, introducing powerful Retrieval-Augmented Generation (RAG) capabilities. This major update enhances PocketGroq's ability to provide context-aware responses by leveraging external knowledge sources.
+# PocketGroq v0.4.2: Now with Retrieval-Augmented Generation (RAG)!
+
+PocketGroq has been upgraded to version 0.4.2, introducing powerful Retrieval-Augmented Generation (RAG) capabilities. This major update enhances PocketGroq's ability to provide context-aware responses by leveraging external knowledge sources.
 
 ## New RAG Features
 
@@ -87,7 +224,7 @@ This RAG functionality allows PocketGroq to:
 - Provide more accurate and context-aware information
 - Support complex research and analysis tasks
 
-Upgrade to PocketGroq v0.4.1 today to leverage these powerful new RAG capabilities in your projects!
+Upgrade to PocketGroq v0.4.2 today to leverage these powerful new RAG capabilities in your projects!
 
 ## Other New Features
 
@@ -624,7 +761,7 @@ Each test demonstrates a specific feature of PocketGroq and checks if the output
 
 ## Ollama Server Requirement for RAG
 
-The new Retrieval-Augmented Generation (RAG) feature in PocketGroq v0.4.1 requires an Ollama server for generating embeddings. Ollama is an open-source, locally-run language model server that provides fast and efficient embeddings for RAG functionality.
+The new Retrieval-Augmented Generation (RAG) feature in PocketGroq v0.4.2 requires an Ollama server for generating embeddings. Ollama is an open-source, locally-run language model server that provides fast and efficient embeddings for RAG functionality.
 
 ### Setting up Ollama
 

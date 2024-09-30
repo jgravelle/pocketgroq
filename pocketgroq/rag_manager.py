@@ -1,3 +1,7 @@
+# pocketgroq/rag_manager.py
+
+import os
+import pickle
 from typing import List, Dict, Any, Callable
 from langchain_community.document_loaders import WebBaseLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -5,19 +9,29 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_retrieval_chain
-import os
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 class RAGManager:
-    def __init__(self, embeddings):
+    def __init__(self, embeddings, index_path: str = "faiss_index.pkl"):
         self.embeddings = embeddings
         self.vector_store = None
+        self.index_path = index_path
 
     def load_and_process_documents(self, source: str, chunk_size: int = 1000, chunk_overlap: int = 200, 
                                    progress_callback: Callable[[int, int], None] = None, 
                                    timeout: int = 300):  # 5 minutes timeout
         start_time = time.time()
-        
+
+        if os.path.exists(self.index_path):
+            logger.info("Loading persisted FAISS index.")
+            with open(self.index_path, 'rb') as f:
+                self.vector_store = pickle.load(f)
+            logger.info("FAISS index loaded successfully.")
+            return
+
         if source.startswith(('http://', 'https://')):
             loader = WebBaseLoader(source)
         elif os.path.isfile(source):
@@ -28,20 +42,24 @@ class RAGManager:
         documents = loader.load()
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         split_documents = text_splitter.split_documents(documents)
-        
+
         total_chunks = len(split_documents)
         for i, doc in enumerate(split_documents):
             if time.time() - start_time > timeout:
                 raise TimeoutError(f"Document processing exceeded the {timeout} seconds timeout.")
-            
+
             if not self.vector_store:
                 self.vector_store = FAISS.from_documents([doc], self.embeddings)
             else:
                 self.vector_store.add_documents([doc])
-            
+
             if progress_callback:
                 progress_callback(i + 1, total_chunks)
 
+        # Persist the FAISS index
+        with open(self.index_path, 'wb') as f:
+            pickle.dump(self.vector_store, f)
+        logger.info("FAISS index persisted to disk.")
 
     def query_documents(self, llm, query: str) -> Dict[str, Any]:
         if not self.vector_store:
