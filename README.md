@@ -1,4 +1,4 @@
-# PocketGroq v0.4.2: Now with Conversation Persistence and Enhanced RAG!
+# PocketGroq v0.4.3: Now with Conversation Persistence and Enhanced RAG!
 ![PocketGroq Logo](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
 
 ## Version 0.4.3 Update
@@ -144,9 +144,9 @@ print(report)
 4. **Scalability**: Handle complex, multi-turn conversations and large document sets more effectively.
 5. **Flexibility**: Choose between persistent and non-persistent modes based on your application's needs.
 
-Upgrade to PocketGroq v0.4.2 today to leverage these powerful new persistence capabilities in your projects!
+Upgrade to PocketGroq v0.4.3 today to leverage these powerful new persistence capabilities in your projects!
 
-## What's New in v0.4.2
+## What's New in v0.4.3
 
 - **Conversation Persistence**: Maintain context across multiple interactions for more coherent dialogues.
 - **Enhanced Retrieval-Augmented Generation (RAG)**: Improve response accuracy with persistent document context.
@@ -157,9 +157,9 @@ Upgrade to PocketGroq v0.4.2 today to leverage these powerful new persistence ca
 For full details on the new persistence features and RAG enhancements, see the [Persistence Features](#persistence-features) and [RAG Features](#rag-features) sections below.
 
 
-# PocketGroq v0.4.2: Now with Retrieval-Augmented Generation (RAG)!
+# PocketGroq v0.4.3: Now with Retrieval-Augmented Generation (RAG)!
 
-PocketGroq has been upgraded to version 0.4.2, introducing powerful Retrieval-Augmented Generation (RAG) capabilities. This major update enhances PocketGroq's ability to provide context-aware responses by leveraging external knowledge sources.
+PocketGroq has been upgraded to version 0.4.3, introducing powerful Retrieval-Augmented Generation (RAG) capabilities. This major update enhances PocketGroq's ability to provide context-aware responses by leveraging external knowledge sources.
 
 ## New RAG Features
 
@@ -231,7 +231,7 @@ This RAG functionality allows PocketGroq to:
 - Provide more accurate and context-aware information
 - Support complex research and analysis tasks
 
-Upgrade to PocketGroq v0.4.2 today to leverage these powerful new RAG capabilities in your projects!
+Upgrade to PocketGroq v0.4.3 today to leverage these powerful new RAG capabilities in your projects!
 
 ## Other New Features
 
@@ -768,7 +768,7 @@ Each test demonstrates a specific feature of PocketGroq and checks if the output
 
 ## Ollama Server Requirement for RAG
 
-The new Retrieval-Augmented Generation (RAG) feature in PocketGroq v0.4.2 requires an Ollama server for generating embeddings. Ollama is an open-source, locally-run language model server that provides fast and efficient embeddings for RAG functionality.
+The new Retrieval-Augmented Generation (RAG) feature in PocketGroq v0.4.3 requires an Ollama server for generating embeddings. Ollama is an open-source, locally-run language model server that provides fast and efficient embeddings for RAG functionality.
 
 ### Setting up Ollama
 
