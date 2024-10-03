@@ -1,13 +1,20 @@
 # PocketGroq v0.4.2: Now with Conversation Persistence and Enhanced RAG!
 ![PocketGroq Logo](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
 
-PocketGroq has been upgraded to version 0.4.2, introducing powerful conversation persistence and enhanced Retrieval-Augmented Generation (RAG) capabilities. These major updates significantly improve PocketGroq's ability to maintain context across interactions and provide more accurate, context-aware responses.
+## Version 0.4.3 Update
 
-## New Persistence Features
+In this latest version (0.4.3), we've made significant improvements to how PocketGroq interacts with the Ollama server:
 
-### Conversation Persistence
+- **Flexible Ollama Dependency**: PocketGroq no longer requires Ollama to be running all the time. This allows for more versatile use of the library's core features.
 
-PocketGroq now supports maintaining conversation history across multiple interactions, allowing for more coherent and context-aware dialogues.
+- **Persistent Features**: Users should be aware that Ollama will need to be running to take advantage of various persistence features, including RAG (Retrieval-Augmented Generation) functionality.
+
+- **Graceful Handling**: When Ollama-dependent features are accessed without the server running, PocketGroq will now provide clear error messages, allowing users to start the server and retry their request.
+
+
+### Conversational Persistence
+
+PocketGroq supports maintaining conversation history across multiple interactions, allowing for more coherent and context-aware dialogues.
 
 #### Simple Usage:
 

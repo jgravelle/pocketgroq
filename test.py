@@ -350,6 +350,24 @@ def test_rag_error_handling():
         assert str(e) == "RAG has not been initialized. Call initialize_rag first."
     else:
         raise AssertionError("Expected ValueError was not raised")
+    
+def test_generate_with_reflection():
+    print("\nTesting Generate with Reflection...")
+    prompt = "Explain the concept of quantum entanglement in simple terms."
+    response, is_satisfactory = groq.generate_with_reflection(
+        prompt=prompt,
+        model="llama3-8b-8192",
+        temperature=0.5,
+        max_tokens=1024,
+        top_p=1,
+        stop=None,
+        stream=False
+    )
+    print("Prompt:", prompt)
+    print("Response:", response)
+    print("Is satisfactory:", is_satisfactory)
+    assert isinstance(response, str) and len(response) > 0
+    assert isinstance(is_satisfactory, bool)
 
 def test_persistent_conversation():
     print("\nTesting Persistent Conversation...")
@@ -415,7 +433,8 @@ def display_menu():
     print("18. Test Disposable Conversation")
     print("19. Run All RAG Tests")
     print("20. Run All Conversation Tests")
-    print("21. Run All Tests")
+    print("21. Generate with Reflection")  # New menu option
+    print("22. Run All Tests")  # Shifted down
     print("0. Exit")
 
 async def main():
@@ -424,7 +443,7 @@ async def main():
     
     while True:
         display_menu()
-        choice = input("Enter your choice (0-21): ")
+        choice = input("Enter your choice (0-22): ")
         
         try:
             if choice == '0':
@@ -476,6 +495,9 @@ async def main():
                 test_disposable_conversation()
                 print("\nAll Conversation tests completed successfully!")
             elif choice == '21':
+                test_generate_with_reflection()  # New test function
+            elif choice == '22':  # Shifted down
+                # ... (run all tests, including the new one)
                 test_basic_chat_completion()
                 test_streaming_chat_completion()
                 test_override_default_model()
@@ -494,6 +516,7 @@ async def main():
                 test_rag_error_handling()
                 test_persistent_conversation()
                 test_disposable_conversation()
+                test_generate_with_reflection()  # Added new test
                 print("\nAll tests completed successfully!")
             else:
                 print("Invalid choice. Please try again.")

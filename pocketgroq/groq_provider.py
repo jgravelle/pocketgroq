@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import subprocess
+import requests
 
 from collections import defaultdict
 from groq import Groq, AsyncGroq
@@ -12,7 +13,7 @@ from langchain_groq import ChatGroq
 from langchain_community.embeddings import OllamaEmbeddings
 from typing import Callable, Dict, Any, List, Union, AsyncIterator, Optional
 
-from .exceptions import GroqAPIKeyMissingError, GroqAPIError
+from .exceptions import GroqAPIKeyMissingError, GroqAPIError, OllamaServerNotRunningError
 from .web_tool import WebTool
 from .chain_of_thought.cot_manager import ChainOfThoughtManager
 from .chain_of_thought.llm_interface import LLMInterface
@@ -38,13 +39,32 @@ class GroqProvider(LLMInterface):
         self.rag_persistent = rag_persistent
         self.rag_index_path = rag_index_path
 
-        # Initialize RAG with persistence if enabled
-        if self.rag_persistent:
-            logger.info("Initializing RAG with persistence enabled.")
-            self.initialize_rag(index_path=self.rag_index_path)
-        
         # Initialize conversation sessions
         self.conversation_sessions = defaultdict(list)  # session_id -> list of messages
+
+        # Check if Ollama server is running and initialize RAG if it is
+        if self.is_ollama_server_running():
+            if self.rag_persistent:
+                logger.info("Initializing RAG with persistence enabled.")
+                self.initialize_rag(index_path=self.rag_index_path)
+        else:
+            logger.warning("Ollama server is not running. RAG functionality will be limited.")
+
+    def is_ollama_server_running(self) -> bool:
+        """Check if the Ollama server is running."""
+        try:
+            response = requests.get("http://localhost:11434/api/tags")
+            return response.status_code == 200
+        except requests.RequestException:
+            return False
+
+    def ensure_ollama_server_running(func):
+        """Decorator to ensure Ollama server is running for functions that require it."""
+        def wrapper(self, *args, **kwargs):
+            if not self.is_ollama_server_running():
+                raise OllamaServerNotRunningError("Ollama server is not running. Please start it and try again.")
+            return func(self, *args, **kwargs)
+        return wrapper
 
     def register_tool(self, name: str, func: callable):
         self.tools[name] = func
@@ -271,6 +291,7 @@ class GroqProvider(LLMInterface):
         """
         return self.cot_manager.synthesize_response(cot_steps)
     
+    @ensure_ollama_server_running
     def initialize_rag(self, ollama_base_url: str = "http://localhost:11434", model_name: str = "nomic-embed-text", index_path: str = "faiss_index.pkl"):
         try:
             # Attempt to pull the model if it's not already available
@@ -283,6 +304,7 @@ class GroqProvider(LLMInterface):
         self.rag_manager = RAGManager(embeddings, index_path=index_path)
         logger.info("RAG initialized successfully.")
 
+    @ensure_ollama_server_running
     def load_documents(self, source: str, chunk_size: int = 1000, chunk_overlap: int = 200, 
                        progress_callback: Callable[[int, int], None] = None, timeout: int = 300, 
                        persistent: bool = None):
@@ -297,13 +319,14 @@ class GroqProvider(LLMInterface):
 
         self.rag_manager.load_and_process_documents(source, chunk_size, chunk_overlap, progress_callback, timeout)
 
-
-        # Use a separate index path if non-persistent
-        index_path = self.rag_index_path if persistent else f"temp_{self.rag_index_path}"
-        self.rag_manager.index_path = index_path
-
-        self.rag_manager.load_and_process_documents(source, chunk_size, chunk_overlap, progress_callback, timeout)
-
+    @ensure_ollama_server_running
+    def query_documents(self, query: str, session_id: Optional[str] = None, **kwargs) -> str:
+        if not self.rag_manager:
+            raise ValueError("RAG has not been initialized. Call initialize_rag first.")
+        
+        llm = ChatGroq(groq_api_key=self.api_key, model_name=kwargs.get("model", "llama3-8b-8192"))
+        response = self.rag_manager.query_documents(llm, query)
+        return response['answer']
 
     def query_documents(self, query: str, session_id: Optional[str] = None, **kwargs) -> str:
         if not self.rag_manager:
