@@ -1,4 +1,4 @@
-PocketGroq provides a simpler interface to interact with the Groq API, aiding in rapid development by abstracting complex API calls into simple functions. Version 0.4.0 introduces powerful Retrieval-Augmented Generation (RAG) capabilities, enhancing its ability to provide context-aware responses. It also includes a WebTool for web searches and content retrieval, and Chain of Thought (CoT) reasoning capabilities, making it even more versatile for complex problem-solving tasks.
+![PocketGroq Logo](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
 
 Please act as an expert Python programmer and software engineer. The attached pocketgroq.md file contains the complete and up-to-date codebase for our application. Your task is to thoroughly analyze the codebase, understand its programming flow and logic, and provide detailed insights, suggestions, and solutions to enhance the application's performance, efficiency, readability, and maintainability.
 

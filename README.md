@@ -125,13 +125,12 @@ assistant.load_source("https://www.ipcc.ch/reports/")
 assistant.load_source("path/to/local/climate_study.pdf")
 
 # Perform research
-topic = "Impact of climate change on biodiversity"
-research_summary = assistant.research(topic)
+research_summary = assistant.research("Impact of climate change on biodiversity")
 print("\nResearch Summary:")
 print(research_summary)
 
 # Generate a report
-report = assistant.generate_report(topic, research_summary)
+report = assistant.generate_report("Impact of climate change on biodiversity", research_summary)
 print("\nGenerated Report:")
 print(report)
 ```
@@ -169,6 +168,7 @@ PocketGroq has been upgraded to version 0.4.3, introducing powerful Retrieval-Au
 from pocketgroq import GroqProvider
 
 groq = GroqProvider()
+
 groq.initialize_rag()  # Initialize RAG with default settings
 ```
 
@@ -176,9 +176,11 @@ groq.initialize_rag()  # Initialize RAG with default settings
 
 ```python
 # Load a local document
+
 groq.load_documents("path/to/local/document.txt")
 
 # Load content from a web page
+
 groq.load_documents("https://example.com/article")
 ```
 
@@ -204,11 +206,15 @@ print(response)
 from pocketgroq import GroqProvider
 
 groq = GroqProvider()
+
 groq.initialize_rag()
 
 # Load multiple sources
+
 groq.load_documents("https://en.wikipedia.org/wiki/Renewable_energy")
+
 groq.load_documents("https://www.energy.gov/eere/renewables")
+
 groq.load_documents("path/to/local/energy_report.pdf")
 
 # Perform a complex query
@@ -313,6 +319,7 @@ from pocketgroq import GroqProvider
 from pocketgroq.web_tool import WebTool
 
 # Initialize the GroqProvider
+
 groq = GroqProvider()
 
 # Initialize the WebTool
@@ -470,6 +477,7 @@ class Recipe(BaseModel):
     ingredients: List[Ingredient]
     directions: List[str]
 
+
 def get_recipe(recipe_name: str) -> Recipe:
     response = groq.generate(
         prompt=f"Fetch a recipe for {recipe_name}",
@@ -479,6 +487,7 @@ def get_recipe(recipe_name: str) -> Recipe:
         json_mode=True
     )
     return Recipe.parse_raw(response)
+
 
 def print_recipe(recipe: Recipe):
     print("Recipe:", recipe.recipe_name)
@@ -498,8 +507,10 @@ print_recipe(recipe)
 PocketGroq allows you to define tools (functions) that the model can use during the conversation:
 
 ```python
+
 def reverse_string(input_string: str) -> dict:
     return {"reversed_string": input_string[::-1]}
+
 
 tools = [
     {
@@ -532,9 +543,11 @@ print("Response:", response)
 from pocketgroq import GroqProvider
 import base64
 
+
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
+
 
 groq = GroqProvider()
 
@@ -792,7 +805,9 @@ The new Retrieval-Augmented Generation (RAG) feature in PocketGroq v0.4.3 requir
 By default, PocketGroq will attempt to connect to the Ollama server at `http://localhost:11434`. If your Ollama server is running on a different address or port, you can specify this when initializing RAG:
 
 ```python
+
 groq = GroqProvider()
+
 groq.initialize_rag(ollama_base_url="http://your-ollama-server:port")
 ```
 
@@ -861,3 +876,4 @@ This project is licensed under the MIT License. When using PocketGroq in your pr
 ---
 
 Thank you for using PocketGroq! We hope this tool enhances your development process and enables you to create amazing AI-powered applications with ease. If you have any questions or need further assistance, don't hesitate to reach out to the community or check the documentation. Happy coding!
+

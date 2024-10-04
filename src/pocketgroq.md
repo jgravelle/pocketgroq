@@ -2,7 +2,6 @@
 
 ```python
 # setup.py
-
 from setuptools import setup, find_packages
 
 with open("README.md", "r", encoding="utf-8") as fh:
@@ -10,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pocketgroq",
-    version="0.4.0",  # Increment the version number
+    version="0.4.3",  # Incremented the version number
     author="PocketGroq Team",
     author_email="pocketgroq@example.com",
     description="A library for easy integration with Groq API, including image handling and Chain of Thought reasoning",
@@ -35,14 +34,20 @@ setup(
     packages=find_packages(exclude=["tests", "tests.*"]),
     python_requires=">=3.7",
     install_requires=[
-        "groq==0.8.0",
-        "python-dotenv==0.19.1",
+        "bs4>=0.0.2",
+        "groq>=0.8.0",
+        "python-dotenv>=0.19.1",
         "requests>=2.32.3",
+        "langchain>=0.3.1",
+        "langchain-groq>=0.2.0",
+        "langchain-community>=0.3.1",
+        "faiss-cpu>=1.8.0.post1",
+        "ollama>=0.3.3",
     ],
     extras_require={
         "dev": [
-            "pytest==7.3.1",
-            "pytest-asyncio==0.21.0",
+            "pytest>=7.3.1",
+            "pytest-asyncio>=0.21.0",
         ],
     },
 )
@@ -51,22 +56,38 @@ setup(
 # test.py
 
 ```python
+# test.py
+
 import asyncio
 import json
 import logging
 import os
 import subprocess
 import tempfile
+import uuid
 
 from typing import List, Optional, Union
 from pydantic import BaseModel, Field, validator
 from pocketgroq import GroqProvider, GroqAPIKeyMissingError, GroqAPIError
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+DEBUG = False
+logging.basicConfig(level=logging.FATAL)
+if DEBUG:
+    logger = logging.getLogger(__name__)
 
-# Initialize the GroqProvider
-groq = GroqProvider()
+# Initialize the GroqProvider with RAG persistence enabled by default
+groq = GroqProvider(rag_persistent=True, rag_index_path="faiss_persistent_index.pkl")
+
+# Generate a unique session ID for testing persistent conversations
+PERSISTENT_SESSION_ID = str(uuid.uuid4())
+DISPOSABLE_SESSION_ID = str(uuid.uuid4())
+
+def start_conversations():
+    """
+    Initialize conversation sessions for persistent and disposable modes.
+    """
+    groq.start_conversation(PERSISTENT_SESSION_ID)
+    groq.start_conversation(DISPOSABLE_SESSION_ID)
 
 def test_basic_chat_completion():
     print("Testing Basic Chat Completion...")
@@ -79,7 +100,7 @@ def test_basic_chat_completion():
         stop=None,
         stream=False
     )
-    print(response)
+    print("Response:", response)
     assert isinstance(response, str) and len(response) > 0
 
 def test_streaming_chat_completion():
@@ -122,7 +143,7 @@ def test_chat_completion_with_stop_sequence():
         stop=", 6",
         stream=False
     )
-    print(response)
+    print("Response:", response)
     assert isinstance(response, str) and "5" in response and "6" not in response
 
 async def test_async_generation():
@@ -136,7 +157,7 @@ async def test_async_generation():
         stop=None,
         async_mode=True
     )
-    print(response)
+    print("Response:", response)
     assert isinstance(response, str) and len(response) > 0
 
 async def test_streaming_async_chat_completion():
@@ -266,7 +287,7 @@ def test_vision():
         model="llava-v1.5-7b-4096-preview",
         image_url=image_url
     )
-    print(response_url)
+    print("Response:", response_url)
     assert isinstance(response_url, str) and len(response_url) > 0
 
 def test_cot_problem_solving():
@@ -321,13 +342,11 @@ def test_rag_initialization():
         print(f"Failed to initialize RAG: {e}")
         raise
 
-def test_document_loading():
-    print("\nTesting Document Loading...")
+def test_document_loading(persistent: bool = True):
+    mode = "Persistent" if persistent else "Disposable"
+    print(f"\nTesting Document Loading in {mode} Mode...")
     try:
-        # Ensure RAG is initialized
-        if not groq.rag_manager:
-            groq.initialize_rag()
-
+        # Load documents with specified persistence
         def progress_callback(current, total):
             print(f"Processing document chunks: {current}/{total}")
 
@@ -336,14 +355,14 @@ def test_document_loading():
             temp_file.write("This is a test document about artificial intelligence and machine learning.")
             temp_file_path = temp_file.name
 
-        groq.load_documents(temp_file_path, progress_callback=progress_callback, timeout=60)  # 1-minute timeout
+        groq.load_documents(temp_file_path, progress_callback=progress_callback, timeout=60, persistent=persistent)  # 1-minute timeout
         print("Local document loaded successfully.")
         assert groq.rag_manager.vector_store is not None
 
         # Test loading from a URL with a shorter timeout
         try:
             groq.load_documents("https://en.wikipedia.org/wiki/Artificial_intelligence", 
-                                progress_callback=progress_callback, timeout=120)  # 2-minute timeout
+                                progress_callback=progress_callback, timeout=120, persistent=persistent)  # 2-minute timeout
             print("Web document loaded successfully.")
         except TimeoutError:
             print("Web document loading timed out, but local document was processed successfully.")
@@ -372,7 +391,7 @@ def test_rag_error_handling():
     print("\nTesting RAG Error Handling...")
     # Reset GroqProvider to ensure RAG is not initialized
     global groq
-    groq = GroqProvider()
+    groq = GroqProvider(rag_persistent=False)  # Initialize without RAG persistence
     
     try:
         groq.query_documents("This should fail")
@@ -390,7 +409,65 @@ def test_rag_error_handling():
     else:
         raise AssertionError("Expected ValueError was not raised")
     
+def test_generate_with_reflection():
+    print("\nTesting Generate with Reflection...")
+    prompt = "Explain the concept of quantum entanglement in simple terms."
+    response, is_satisfactory = groq.generate_with_reflection(
+        prompt=prompt,
+        model="llama3-8b-8192",
+        temperature=0.5,
+        max_tokens=1024,
+        top_p=1,
+        stop=None,
+        stream=False
+    )
+    print("Prompt:", prompt)
+    print("Response:", response)
+    print("Is satisfactory:", is_satisfactory)
+    assert isinstance(response, str) and len(response) > 0
+    assert isinstance(is_satisfactory, bool)
 
+def test_persistent_conversation():
+    print("\nTesting Persistent Conversation...")
+    session_id = PERSISTENT_SESSION_ID
+    # Ensure the session is started
+    groq.start_conversation(session_id)
+    
+    # First user message
+    user_message1 = "What is the capital of Ohio?"
+    response1 = groq.generate(prompt=user_message1, session_id=session_id)
+    print(f"User: {user_message1}")
+    print(f"PG: {response1}")
+    assert isinstance(response1, str) and len(response1) > 0
+
+    # Second user message, expecting context-aware response
+    user_message2 = "What is its population?"
+    response2 = groq.generate(prompt=user_message2, session_id=session_id)
+    print(f"\nUser: {user_message2}")
+    print(f"PG: {response2}")
+    assert isinstance(response2, str) and len(response2) > 0
+
+def test_disposable_conversation():
+    print("\nTesting Disposable Conversation...")
+    session_id = DISPOSABLE_SESSION_ID
+    # Ensure the session is started
+    groq.start_conversation(session_id)
+    
+    # First user message
+    user_message1 = "What is the capital of Ohio?"
+    response1 = groq.generate(prompt=user_message1, session_id=session_id)
+    print(f"User: {user_message1}")
+    print(f"PG: {response1}")
+    assert isinstance(response1, str) and len(response1) > 0
+
+    # Second user message, expecting non-context-aware response
+    user_message2 = "What is its population?"
+    # Reset the conversation to make it disposable
+    groq.reset_conversation(session_id)
+    response2 = groq.generate(prompt=user_message2, session_id=session_id)
+    print(f"\nUser: {user_message2}")
+    print(f"PG: {response2}")
+    assert isinstance(response2, str) and len(response2) > 0
 
 def display_menu():
     print("\nPocketGroq Test Menu:")
@@ -410,14 +487,21 @@ def display_menu():
     print("14. Test Document Loading")
     print("15. Test Document Querying")
     print("16. Test RAG Error Handling")
-    print("17. Run All RAG Tests")
-    print("18. Run All Tests")
+    print("17. Test Persistent Conversation")
+    print("18. Test Disposable Conversation")
+    print("19. Run All RAG Tests")
+    print("20. Run All Conversation Tests")
+    print("21. Generate with Reflection")  # New menu option
+    print("22. Run All Tests")  # Shifted down
     print("0. Exit")
 
 async def main():
+    # Start conversation sessions
+    start_conversations()
+    
     while True:
         display_menu()
-        choice = input("Enter your choice (0-18): ")
+        choice = input("Enter your choice (0-22): ")
         
         try:
             if choice == '0':
@@ -446,23 +530,32 @@ async def main():
                 test_cot_step_generation()
             elif choice == '12':
                 test_cot_synthesis()
-            
             elif choice == '13':
                 test_rag_initialization()
             elif choice == '14':
-                test_document_loading()
+                test_document_loading(persistent=True)
             elif choice == '15':
                 test_document_querying()
             elif choice == '16':
                 test_rag_error_handling()
             elif choice == '17':
+                test_persistent_conversation()
+            elif choice == '18':
+                test_disposable_conversation()
+            elif choice == '19':
                 test_rag_initialization()
-                test_document_loading()
+                test_document_loading(persistent=True)
                 test_document_querying()
                 test_rag_error_handling()
                 print("\nAll RAG tests completed successfully!")
-
-            elif choice == '18':
+            elif choice == '20':
+                test_persistent_conversation()
+                test_disposable_conversation()
+                print("\nAll Conversation tests completed successfully!")
+            elif choice == '21':
+                test_generate_with_reflection()  # New test function
+            elif choice == '22':  # Shifted down
+                # ... (run all tests, including the new one)
                 test_basic_chat_completion()
                 test_streaming_chat_completion()
                 test_override_default_model()
@@ -476,9 +569,12 @@ async def main():
                 test_cot_step_generation()
                 test_cot_synthesis()
                 test_rag_initialization()
-                test_document_loading()
+                test_document_loading(persistent=True)
                 test_document_querying()
                 test_rag_error_handling()
+                test_persistent_conversation()
+                test_disposable_conversation()
+                test_generate_with_reflection()  # Added new test
                 print("\nAll tests completed successfully!")
             else:
                 print("Invalid choice. Please try again.")
@@ -486,6 +582,8 @@ async def main():
             print(f"Error: {e}")
         except GroqAPIError as e:
             print(f"API Error: {e}")
+        except AssertionError as e:
+            print(f"Assertion Error: {e}")
         except Exception as e:
             print(f"Unexpected error: {e}")
         
@@ -493,6 +591,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 ```
 
 # pocketgroq\config.py
@@ -521,12 +620,18 @@ def get_api_key() -> str:
 # pocketgroq\exceptions.py
 
 ```python
+# pocketgroq/exceptions.py
+
 class GroqAPIKeyMissingError(Exception):
     """Raised when the Groq API key is missing."""
     pass
 
 class GroqAPIError(Exception):
     """Raised when there's an error with the Groq API."""
+    pass
+
+class OllamaServerNotRunningError(Exception):
+    """Raised when the Ollama server is not running but is required for an operation."""
     pass
 ```
 
@@ -536,22 +641,28 @@ class GroqAPIError(Exception):
 # pocketgroq/groq_provider.py
 
 import asyncio
-import os
 import json
+import logging
+import os
 import subprocess
+import requests
 
+from collections import defaultdict
 from groq import Groq, AsyncGroq
 from langchain_groq import ChatGroq
 from langchain_community.embeddings import OllamaEmbeddings
-from typing import Callable, Dict, Any, List, Union, AsyncIterator
-from .exceptions import GroqAPIKeyMissingError, GroqAPIError
+from typing import Callable, Dict, Any, List, Union, AsyncIterator, Optional
+
+from .exceptions import GroqAPIKeyMissingError, GroqAPIError, OllamaServerNotRunningError
 from .web_tool import WebTool
 from .chain_of_thought.cot_manager import ChainOfThoughtManager
 from .chain_of_thought.llm_interface import LLMInterface
 from .rag_manager import RAGManager
 
+logger = logging.getLogger(__name__)
+
 class GroqProvider(LLMInterface):
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str = None, rag_persistent: bool = True, rag_index_path: str = "faiss_index.pkl"):
         self.api_key = api_key or os.environ.get("GROQ_API_KEY")
         if not self.api_key:
             raise GroqAPIKeyMissingError("Groq API key is not provided")
@@ -564,14 +675,101 @@ class GroqProvider(LLMInterface):
         self.web_tool = WebTool()
         self.cot_manager = ChainOfThoughtManager(llm=self)
         self.rag_manager = None
-        self.tools = {} 
+        self.tools = {}
+        self.rag_persistent = rag_persistent
+        self.rag_index_path = rag_index_path
+
+        # Initialize conversation sessions
+        self.conversation_sessions = defaultdict(list)  # session_id -> list of messages
+
+        # Check if Ollama server is running and initialize RAG if it is
+        if self.is_ollama_server_running():
+            if self.rag_persistent:
+                logger.info("Initializing RAG with persistence enabled.")
+                self.initialize_rag(index_path=self.rag_index_path)
+        else:
+            logger.warning("Ollama server is not running. RAG functionality will be limited.")
+
+    def is_ollama_server_running(self) -> bool:
+        """Check if the Ollama server is running."""
+        try:
+            response = requests.get("http://localhost:11434/api/tags")
+            return response.status_code == 200
+        except requests.RequestException:
+            return False
+
+    def ensure_ollama_server_running(func):
+        """Decorator to ensure Ollama server is running for functions that require it."""
+        def wrapper(self, *args, **kwargs):
+            if not self.is_ollama_server_running():
+                raise OllamaServerNotRunningError("Ollama server is not running. Please start it and try again.")
+            return func(self, *args, **kwargs)
+        return wrapper
 
     def register_tool(self, name: str, func: callable):
         self.tools[name] = func
 
-    def generate(self, prompt: str, **kwargs) -> Union[str, AsyncIterator[str]]:
-        messages = [{"role": "user", "content": prompt}]
-        return self._create_completion(messages, **kwargs)
+    def end_conversation(self, conversation_id: str):
+        """
+        Ends a conversation and clears its history.
+
+        Args:
+            conversation_id (str): The ID of the conversation to end.
+        """
+        if conversation_id in self.conversations:
+            del self.conversations[conversation_id]
+            logger.info(f"Ended conversation with ID: {conversation_id}")
+        else:
+            logger.warning(f"Attempted to end non-existent conversation ID: {conversation_id}")
+
+    def get_conversation_history(self, session_id: str) -> List[Dict[str, str]]:
+        """
+        Retrieve the conversation history for a given session.
+
+        Args:
+            session_id (str): Unique identifier for the conversation session.
+
+        Returns:
+            List[Dict[str, str]]: List of messages in the conversation.
+        """
+        return self.conversation_sessions.get(session_id, [])            
+
+    def start_conversation(self, session_id: str):
+        """
+        Initialize a new conversation session.
+
+        Args:
+            session_id (str): Unique identifier for the conversation session.
+        """
+        if session_id in self.conversation_sessions:
+            logger.warning(f"Session '{session_id}' already exists. Overwriting.")
+        self.conversation_sessions[session_id] = []
+        logger.info(f"Started new conversation session '{session_id}'.")
+    
+    def reset_conversation(self, session_id: str):
+        if session_id in self.conversation_sessions:
+            del self.conversation_sessions[session_id]
+            logger.info(f"Conversation session '{session_id}' has been reset.")
+        else:
+            logger.warning(f"Attempted to reset non-existent session '{session_id}'.")   
+
+    def generate(self, prompt: str, session_id: Optional[str] = None, **kwargs) -> Union[str, AsyncIterator[str]]:
+        if session_id:
+            messages = self.conversation_sessions[session_id]
+            messages.append({"role": "user", "content": prompt})
+        else:
+            messages = [{"role": "user", "content": prompt}]
+
+        response = self._create_completion(messages, **kwargs)
+
+        if session_id:
+            if isinstance(response, str):
+                self.conversation_sessions[session_id].append({"role": "assistant", "content": response})
+            elif asyncio.iscoroutine(response):
+                # Handle asynchronous streaming responses if needed
+                pass
+
+        return response
 
     def set_api_key(self, api_key: str):
         self.api_key = api_key
@@ -733,25 +931,44 @@ class GroqProvider(LLMInterface):
         """
         return self.cot_manager.synthesize_response(cot_steps)
     
-    def initialize_rag(self, ollama_base_url: str = "http://localhost:11434", model_name: str = "nomic-embed-text"):
+    @ensure_ollama_server_running
+    def initialize_rag(self, ollama_base_url: str = "http://localhost:11434", model_name: str = "nomic-embed-text", index_path: str = "faiss_index.pkl"):
         try:
             # Attempt to pull the model if it's not already available
             subprocess.run(["ollama", "pull", model_name], check=True)
         except subprocess.CalledProcessError:
-            print(f"Failed to pull model {model_name}. Ensure Ollama is installed and running.")
+            logger.error(f"Failed to pull model {model_name}. Ensure Ollama is installed and running.")
             raise
 
         embeddings = OllamaEmbeddings(base_url=ollama_base_url, model=model_name)
-        self.rag_manager = RAGManager(embeddings)
+        self.rag_manager = RAGManager(embeddings, index_path=index_path)
+        logger.info("RAG initialized successfully.")
 
+    @ensure_ollama_server_running
     def load_documents(self, source: str, chunk_size: int = 1000, chunk_overlap: int = 200, 
-                       progress_callback: Callable[[int, int], None] = None, timeout: int = 300):
+                       progress_callback: Callable[[int, int], None] = None, timeout: int = 300, 
+                       persistent: bool = None):
+        if persistent is None:
+            persistent = self.rag_persistent
         if not self.rag_manager:
             raise ValueError("RAG has not been initialized. Call initialize_rag first.")
+
+        # Use a separate index path if non-persistent
+        index_path = self.rag_index_path if persistent else f"temp_{self.rag_index_path}"
+        self.rag_manager.index_path = index_path
+
         self.rag_manager.load_and_process_documents(source, chunk_size, chunk_overlap, progress_callback, timeout)
 
+    @ensure_ollama_server_running
+    def query_documents(self, query: str, session_id: Optional[str] = None, **kwargs) -> str:
+        if not self.rag_manager:
+            raise ValueError("RAG has not been initialized. Call initialize_rag first.")
+        
+        llm = ChatGroq(groq_api_key=self.api_key, model_name=kwargs.get("model", "llama3-8b-8192"))
+        response = self.rag_manager.query_documents(llm, query)
+        return response['answer']
 
-    def query_documents(self, query: str, **kwargs) -> str:
+    def query_documents(self, query: str, session_id: Optional[str] = None, **kwargs) -> str:
         if not self.rag_manager:
             raise ValueError("RAG has not been initialized. Call initialize_rag first.")
         
@@ -763,6 +980,10 @@ class GroqProvider(LLMInterface):
 # pocketgroq\rag_manager.py
 
 ```python
+# pocketgroq/rag_manager.py
+
+import os
+import pickle
 from typing import List, Dict, Any, Callable
 from langchain_community.document_loaders import WebBaseLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -770,19 +991,29 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.chains import create_retrieval_chain
-import os
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 class RAGManager:
-    def __init__(self, embeddings):
+    def __init__(self, embeddings, index_path: str = "faiss_index.pkl"):
         self.embeddings = embeddings
         self.vector_store = None
+        self.index_path = index_path
 
     def load_and_process_documents(self, source: str, chunk_size: int = 1000, chunk_overlap: int = 200, 
                                    progress_callback: Callable[[int, int], None] = None, 
                                    timeout: int = 300):  # 5 minutes timeout
         start_time = time.time()
-        
+
+        if os.path.exists(self.index_path):
+            logger.info("Loading persisted FAISS index.")
+            with open(self.index_path, 'rb') as f:
+                self.vector_store = pickle.load(f)
+            logger.info("FAISS index loaded successfully.")
+            return
+
         if source.startswith(('http://', 'https://')):
             loader = WebBaseLoader(source)
         elif os.path.isfile(source):
@@ -793,20 +1024,24 @@ class RAGManager:
         documents = loader.load()
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         split_documents = text_splitter.split_documents(documents)
-        
+
         total_chunks = len(split_documents)
         for i, doc in enumerate(split_documents):
             if time.time() - start_time > timeout:
                 raise TimeoutError(f"Document processing exceeded the {timeout} seconds timeout.")
-            
+
             if not self.vector_store:
                 self.vector_store = FAISS.from_documents([doc], self.embeddings)
             else:
                 self.vector_store.add_documents([doc])
-            
+
             if progress_callback:
                 progress_callback(i + 1, total_chunks)
 
+        # Persist the FAISS index
+        with open(self.index_path, 'wb') as f:
+            pickle.dump(self.vector_store, f)
+        logger.info("FAISS index persisted to disk.")
 
     def query_documents(self, llm, query: str) -> Dict[str, Any]:
         if not self.vector_store:
@@ -826,6 +1061,7 @@ class RAGManager:
         retriever = self.vector_store.as_retriever()
         retrieval_chain = create_retrieval_chain(retriever, document_chain)
         return retrieval_chain.invoke({"input": query})
+
 ```
 
 # pocketgroq\utils.py
@@ -852,7 +1088,6 @@ import requests
 from bs4 import BeautifulSoup
 from typing import Dict, Any, List
 from urllib.parse import urlparse, quote_plus
-import os
 
 DEBUG = False  # Set to True for debugging
 
@@ -1342,12 +1577,18 @@ def get_api_key() -> str:
 # build\lib\pocketgroq\exceptions.py
 
 ```python
+# pocketgroq/exceptions.py
+
 class GroqAPIKeyMissingError(Exception):
     """Raised when the Groq API key is missing."""
     pass
 
 class GroqAPIError(Exception):
     """Raised when there's an error with the Groq API."""
+    pass
+
+class OllamaServerNotRunningError(Exception):
+    """Raised when the Ollama server is not running but is required for an operation."""
     pass
 ```
 
@@ -1356,37 +1597,136 @@ class GroqAPIError(Exception):
 ```python
 # pocketgroq/groq_provider.py
 
-import os
-import json
-from typing import Dict, Any, List, Union, AsyncIterator
 import asyncio
+import json
+import logging
+import os
+import subprocess
+import requests
 
+from collections import defaultdict
 from groq import Groq, AsyncGroq
-from .exceptions import GroqAPIKeyMissingError, GroqAPIError
+from langchain_groq import ChatGroq
+from langchain_community.embeddings import OllamaEmbeddings
+from typing import Callable, Dict, Any, List, Union, AsyncIterator, Optional
+
+from .exceptions import GroqAPIKeyMissingError, GroqAPIError, OllamaServerNotRunningError
 from .web_tool import WebTool
 from .chain_of_thought.cot_manager import ChainOfThoughtManager
 from .chain_of_thought.llm_interface import LLMInterface
+from .rag_manager import RAGManager
+
+logger = logging.getLogger(__name__)
 
 class GroqProvider(LLMInterface):
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str = None, rag_persistent: bool = True, rag_index_path: str = "faiss_index.pkl"):
         self.api_key = api_key or os.environ.get("GROQ_API_KEY")
         if not self.api_key:
             raise GroqAPIKeyMissingError("Groq API key is not provided")
         self.client = Groq(api_key=self.api_key)
         self.async_client = AsyncGroq(api_key=self.api_key)
+        self.tool_use_models = [
+            "llama3-groq-70b-8192-tool-use-preview",
+            "llama3-groq-8b-8192-tool-use-preview"
+        ]
+        self.web_tool = WebTool()
         self.cot_manager = ChainOfThoughtManager(llm=self)
+        self.rag_manager = None
+        self.tools = {}
+        self.rag_persistent = rag_persistent
+        self.rag_index_path = rag_index_path
 
-    def generate(self, prompt: str, **kwargs) -> str:
+        # Initialize conversation sessions
+        self.conversation_sessions = defaultdict(list)  # session_id -> list of messages
+
+        # Check if Ollama server is running and initialize RAG if it is
+        if self.is_ollama_server_running():
+            if self.rag_persistent:
+                logger.info("Initializing RAG with persistence enabled.")
+                self.initialize_rag(index_path=self.rag_index_path)
+        else:
+            logger.warning("Ollama server is not running. RAG functionality will be limited.")
+
+    def is_ollama_server_running(self) -> bool:
+        """Check if the Ollama server is running."""
         try:
-            response = self.client.chat.completions.create(
-                model=kwargs.get("model", "llama2-70b-4096"),
-                messages=[{"role": "user", "content": prompt}],
-                temperature=kwargs.get("temperature", 0.5),
-                max_tokens=kwargs.get("max_tokens", 1024),
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            raise GroqAPIError(f"Error in Groq API call: {str(e)}")
+            response = requests.get("http://localhost:11434/api/tags")
+            return response.status_code == 200
+        except requests.RequestException:
+            return False
+
+    def ensure_ollama_server_running(func):
+        """Decorator to ensure Ollama server is running for functions that require it."""
+        def wrapper(self, *args, **kwargs):
+            if not self.is_ollama_server_running():
+                raise OllamaServerNotRunningError("Ollama server is not running. Please start it and try again.")
+            return func(self, *args, **kwargs)
+        return wrapper
+
+    def register_tool(self, name: str, func: callable):
+        self.tools[name] = func
+
+    def end_conversation(self, conversation_id: str):
+        """
+        Ends a conversation and clears its history.
+
+        Args:
+            conversation_id (str): The ID of the conversation to end.
+        """
+        if conversation_id in self.conversations:
+            del self.conversations[conversation_id]
+            logger.info(f"Ended conversation with ID: {conversation_id}")
+        else:
+            logger.warning(f"Attempted to end non-existent conversation ID: {conversation_id}")
+
+    def get_conversation_history(self, session_id: str) -> List[Dict[str, str]]:
+        """
+        Retrieve the conversation history for a given session.
+
+        Args:
+            session_id (str): Unique identifier for the conversation session.
+
+        Returns:
+            List[Dict[str, str]]: List of messages in the conversation.
+        """
+        return self.conversation_sessions.get(session_id, [])            
+
+    def start_conversation(self, session_id: str):
+        """
+        Initialize a new conversation session.
+
+        Args:
+            session_id (str): Unique identifier for the conversation session.
+        """
+        if session_id in self.conversation_sessions:
+            logger.warning(f"Session '{session_id}' already exists. Overwriting.")
+        self.conversation_sessions[session_id] = []
+        logger.info(f"Started new conversation session '{session_id}'.")
+    
+    def reset_conversation(self, session_id: str):
+        if session_id in self.conversation_sessions:
+            del self.conversation_sessions[session_id]
+            logger.info(f"Conversation session '{session_id}' has been reset.")
+        else:
+            logger.warning(f"Attempted to reset non-existent session '{session_id}'.")   
+
+    def generate(self, prompt: str, session_id: Optional[str] = None, **kwargs) -> Union[str, AsyncIterator[str]]:
+        if session_id:
+            messages = self.conversation_sessions[session_id]
+            messages.append({"role": "user", "content": prompt})
+        else:
+            messages = [{"role": "user", "content": prompt}]
+
+        response = self._create_completion(messages, **kwargs)
+
+        if session_id:
+            if isinstance(response, str):
+                self.conversation_sessions[session_id].append({"role": "assistant", "content": response})
+            elif asyncio.iscoroutine(response):
+                # Handle asynchronous streaming responses if needed
+                pass
+
+        return response
 
     def set_api_key(self, api_key: str):
         self.api_key = api_key
@@ -1408,7 +1748,7 @@ class GroqProvider(LLMInterface):
             completion_kwargs["response_format"] = {"type": "json_object"}
 
         if kwargs.get("tools"):
-            completion_kwargs["tools"] = kwargs["tools"]
+            completion_kwargs["tools"] = self._prepare_tools(kwargs["tools"])
             completion_kwargs["tool_choice"] = kwargs.get("tool_choice", "auto")
 
         if kwargs.get("async_mode", False):
@@ -1423,6 +1763,15 @@ class GroqProvider(LLMInterface):
             print(f"Warning: {requested_model} is not optimized for tool use. Switching to {self.tool_use_models[0]}.")
             return self.tool_use_models[0]
         return requested_model or os.environ.get('GROQ_MODEL', 'llama3-8b-8192')
+    
+    def _prepare_tools(self, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        prepared_tools = []
+        for tool in tools:
+            prepared_tool = tool.copy()
+            if 'function' in prepared_tool:
+                prepared_tool['function'] = {k: v for k, v in prepared_tool['function'].items() if k != 'implementation'}
+            prepared_tools.append(prepared_tool)
+        return prepared_tools
 
     def _sync_create_completion(self, **kwargs) -> Union[str, AsyncIterator[str]]:
         try:
@@ -1456,9 +1805,7 @@ class GroqProvider(LLMInterface):
                 "content": message.content,
                 "tool_calls": message.tool_calls,
             }
-            for result in tool_results:
-                new_message["tool_results"] = result
-            return self._create_completion([new_message])
+            return self._create_completion([new_message] + tool_results)
         return message.content
 
     async def _async_process_tool_calls(self, response) -> str:
@@ -1478,20 +1825,16 @@ class GroqProvider(LLMInterface):
     def _execute_tool_calls(self, tool_calls) -> List[Dict[str, Any]]:
         results = []
         for tool_call in tool_calls:
-            if tool_call.function.name == "web_search":
+            if tool_call.function.name in self.tools:
                 args = json.loads(tool_call.function.arguments)
-                result = self.web_tool.search(args.get("query", ""))
-            elif tool_call.function.name == "get_web_content":
-                args = json.loads(tool_call.function.arguments)
-                result = self.web_tool.get_web_content(args.get("url", ""))
+                result = self.tools[tool_call.function.name](**args)
             else:
                 result = {"error": f"Unknown tool: {tool_call.function.name}"}
             
             results.append({
-                "tool_call_id": tool_call.id,
                 "role": "tool",
-                "name": tool_call.function.name,
                 "content": json.dumps(result),
+                "tool_call_id": tool_call.id,
             })
         return results
 
@@ -1527,14 +1870,155 @@ class GroqProvider(LLMInterface):
         """Check if the given text is a valid URL using the integrated WebTool."""
         return self.web_tool.is_url(text)
     
-    def generate_and_execute_cot(self, problem: str, **kwargs) -> List[str]:
-        return self.cot_manager.generate_and_execute_cot(problem)
+    def solve_problem_with_cot(self, problem: str, **kwargs) -> str:
+        """
+        Solve a problem using Chain of Thought reasoning.
+        """
+        return self.cot_manager.solve_problem(problem)
+
+    def generate_cot(self, problem: str, **kwargs) -> List[str]:
+        """
+        Generate Chain of Thought steps for a given problem.
+        """
+        return self.cot_manager.generate_cot(problem)
 
     def synthesize_cot(self, cot_steps: List[str], **kwargs) -> str:
+        """
+        Synthesize a final answer from Chain of Thought steps.
+        """
         return self.cot_manager.synthesize_response(cot_steps)
+    
+    @ensure_ollama_server_running
+    def initialize_rag(self, ollama_base_url: str = "http://localhost:11434", model_name: str = "nomic-embed-text", index_path: str = "faiss_index.pkl"):
+        try:
+            # Attempt to pull the model if it's not already available
+            subprocess.run(["ollama", "pull", model_name], check=True)
+        except subprocess.CalledProcessError:
+            logger.error(f"Failed to pull model {model_name}. Ensure Ollama is installed and running.")
+            raise
 
-    def solve_problem_with_cot(self, problem: str, **kwargs) -> str:
-        return self.cot_manager.solve_problem(problem)
+        embeddings = OllamaEmbeddings(base_url=ollama_base_url, model=model_name)
+        self.rag_manager = RAGManager(embeddings, index_path=index_path)
+        logger.info("RAG initialized successfully.")
+
+    @ensure_ollama_server_running
+    def load_documents(self, source: str, chunk_size: int = 1000, chunk_overlap: int = 200, 
+                       progress_callback: Callable[[int, int], None] = None, timeout: int = 300, 
+                       persistent: bool = None):
+        if persistent is None:
+            persistent = self.rag_persistent
+        if not self.rag_manager:
+            raise ValueError("RAG has not been initialized. Call initialize_rag first.")
+
+        # Use a separate index path if non-persistent
+        index_path = self.rag_index_path if persistent else f"temp_{self.rag_index_path}"
+        self.rag_manager.index_path = index_path
+
+        self.rag_manager.load_and_process_documents(source, chunk_size, chunk_overlap, progress_callback, timeout)
+
+    @ensure_ollama_server_running
+    def query_documents(self, query: str, session_id: Optional[str] = None, **kwargs) -> str:
+        if not self.rag_manager:
+            raise ValueError("RAG has not been initialized. Call initialize_rag first.")
+        
+        llm = ChatGroq(groq_api_key=self.api_key, model_name=kwargs.get("model", "llama3-8b-8192"))
+        response = self.rag_manager.query_documents(llm, query)
+        return response['answer']
+
+    def query_documents(self, query: str, session_id: Optional[str] = None, **kwargs) -> str:
+        if not self.rag_manager:
+            raise ValueError("RAG has not been initialized. Call initialize_rag first.")
+        
+        llm = ChatGroq(groq_api_key=self.api_key, model_name=kwargs.get("model", "llama3-8b-8192"))
+        response = self.rag_manager.query_documents(llm, query)
+        return response['answer']
+```
+
+# build\lib\pocketgroq\rag_manager.py
+
+```python
+# pocketgroq/rag_manager.py
+
+import os
+import pickle
+from typing import List, Dict, Any, Callable
+from langchain_community.document_loaders import WebBaseLoader, TextLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_retrieval_chain
+import time
+import logging
+
+logger = logging.getLogger(__name__)
+
+class RAGManager:
+    def __init__(self, embeddings, index_path: str = "faiss_index.pkl"):
+        self.embeddings = embeddings
+        self.vector_store = None
+        self.index_path = index_path
+
+    def load_and_process_documents(self, source: str, chunk_size: int = 1000, chunk_overlap: int = 200, 
+                                   progress_callback: Callable[[int, int], None] = None, 
+                                   timeout: int = 300):  # 5 minutes timeout
+        start_time = time.time()
+
+        if os.path.exists(self.index_path):
+            logger.info("Loading persisted FAISS index.")
+            with open(self.index_path, 'rb') as f:
+                self.vector_store = pickle.load(f)
+            logger.info("FAISS index loaded successfully.")
+            return
+
+        if source.startswith(('http://', 'https://')):
+            loader = WebBaseLoader(source)
+        elif os.path.isfile(source):
+            loader = TextLoader(source)
+        else:
+            raise ValueError(f"Unsupported source: {source}. Must be a valid URL or file path.")
+
+        documents = loader.load()
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        split_documents = text_splitter.split_documents(documents)
+
+        total_chunks = len(split_documents)
+        for i, doc in enumerate(split_documents):
+            if time.time() - start_time > timeout:
+                raise TimeoutError(f"Document processing exceeded the {timeout} seconds timeout.")
+
+            if not self.vector_store:
+                self.vector_store = FAISS.from_documents([doc], self.embeddings)
+            else:
+                self.vector_store.add_documents([doc])
+
+            if progress_callback:
+                progress_callback(i + 1, total_chunks)
+
+        # Persist the FAISS index
+        with open(self.index_path, 'wb') as f:
+            pickle.dump(self.vector_store, f)
+        logger.info("FAISS index persisted to disk.")
+
+    def query_documents(self, llm, query: str) -> Dict[str, Any]:
+        if not self.vector_store:
+            raise ValueError("Documents have not been loaded. Call load_and_process_documents first.")
+
+        prompt = ChatPromptTemplate.from_template(
+            """
+            Answer the question based on the provided context only.
+            Provide the most accurate response based on the question.
+            <context>
+            {context}
+            </context>
+            Question: {input}
+            """
+        )
+        document_chain = create_stuff_documents_chain(llm, prompt)
+        retriever = self.vector_store.as_retriever()
+        retrieval_chain = create_retrieval_chain(retriever, document_chain)
+        return retrieval_chain.invoke({"input": query})
+
 ```
 
 # build\lib\pocketgroq\utils.py
@@ -1561,7 +2045,6 @@ import requests
 from bs4 import BeautifulSoup
 from typing import Dict, Any, List
 from urllib.parse import urlparse, quote_plus
-import os
 
 DEBUG = False  # Set to True for debugging
 
@@ -1694,8 +2177,9 @@ from .exceptions import GroqAPIKeyMissingError, GroqAPIError
 from .config import get_api_key
 from .chain_of_thought.cot_manager import ChainOfThoughtManager
 from .chain_of_thought.llm_interface import LLMInterface
+from .rag_manager import RAGManager
 
-__all__ = ['GroqProvider', 'GroqAPIKeyMissingError', 'GroqAPIError', 'get_api_key', 'ChainOfThoughtManager', 'LLMInterface']
+__all__ = ['GroqProvider', 'GroqAPIKeyMissingError', 'GroqAPIError', 'get_api_key', 'ChainOfThoughtManager', 'LLMInterface', 'RAGManager']
 ```
 
 # build\lib\pocketgroq\chain_of_thought\cot_manager.py
