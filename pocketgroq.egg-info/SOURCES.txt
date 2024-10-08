@@ -13,4 +13,8 @@ pocketgroq.egg-info/SOURCES.txt
 pocketgroq.egg-info/dependency_links.txt
 pocketgroq.egg-info/requires.txt
 pocketgroq.egg-info/top_level.txt
+pocketgroq/chain_of_thought/__init__.py
+pocketgroq/chain_of_thought/cot_manager.py
+pocketgroq/chain_of_thought/llm_interface.py
+pocketgroq/chain_of_thought/utils.py
 tests/test_groq_provider.py

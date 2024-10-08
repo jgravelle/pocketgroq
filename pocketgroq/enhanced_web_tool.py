@@ -1,9 +1,10 @@
 import requests
 from bs4 import BeautifulSoup
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from urllib.parse import urlparse, urljoin
 import markdown2
 import json
+import re
 
 class EnhancedWebTool:
     def __init__(self, max_depth: int = 3, max_pages: int = 100):
@@ -34,7 +35,7 @@ class EnhancedWebTool:
 
         return results
 
-    def scrape_page(self, url: str, formats: List[str]) -> Optional[Dict[str, Any]]:
+    def scrape_page(self, url: str, formats: List[str]) -> Dict[str, Any]:
         try:
             response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
@@ -88,14 +89,54 @@ class EnhancedWebTool:
         return metadata
 
     def html_to_markdown(self, html_content: str) -> str:
-        return markdown2.markdown(html_content)
+        # Convert HTML to Markdown
+        markdown = markdown2.markdown(html_content)
+        
+        # Clean up the markdown
+        markdown = re.sub(r'\n{3,}', '\n\n', markdown)  # Remove excess newlines
+        markdown = re.sub(r'^\s+', '', markdown, flags=re.MULTILINE)  # Remove leading whitespace
+        
+        return markdown
 
     def extract_structured_data(self, soup: BeautifulSoup) -> Dict[str, Any]:
         structured_data = {}
+
+        # Extract all text content
+        all_text = soup.get_text(separator=' ', strip=True)
+        structured_data['full_text'] = all_text
+
+        # Extract headings
+        headings = {}
+        for i in range(1, 7):
+            h_tags = soup.find_all(f'h{i}')
+            if h_tags:
+                headings[f'h{i}'] = [tag.get_text(strip=True) for tag in h_tags]
+        structured_data['headings'] = headings
+
+        # Extract links
+        links = []
+        for a in soup.find_all('a', href=True):
+            links.append({
+                'text': a.get_text(strip=True),
+                'href': a['href']
+            })
+        structured_data['links'] = links
+
+        # Extract images
+        images = []
+        for img in soup.find_all('img', src=True):
+            images.append({
+                'src': img['src'],
+                'alt': img.get('alt', '')
+            })
+        structured_data['images'] = images
+
+        # Extract JSON-LD
         for script in soup.find_all('script', type='application/ld+json'):
             try:
                 data = json.loads(script.string)
-                structured_data.update(data)
+                structured_data['json_ld'] = data
             except json.JSONDecodeError:
                 pass
+
         return structured_data
