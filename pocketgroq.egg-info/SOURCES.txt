@@ -2,6 +2,7 @@ README.md
 setup.py
 pocketgroq/__init__.py
 pocketgroq/config.py
+pocketgroq/enhanced_web_tool.py
 pocketgroq/exceptions.py
 pocketgroq/groq_provider.py
 pocketgroq/rag_manager.py

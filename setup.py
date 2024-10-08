@@ -38,7 +38,7 @@ setup(
         "langchain>=0.3.1",
         "langchain-groq>=0.2.0",
         "langchain-community>=0.3.1",
-        "markdown2>=2.5.0"
+        "markdown2>=2.5.0",
         "faiss-cpu>=1.8.0.post1",
         "ollama>=0.3.3",
     ],

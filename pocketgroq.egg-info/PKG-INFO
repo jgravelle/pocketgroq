@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: pocketgroq
-Version: 0.4.2
+Version: 0.4.5
 Summary: A library for easy integration with Groq API, including image handling and Chain of Thought reasoning
 Home-page: https://github.com/jgravelle/pocketgroq
 Author: PocketGroq Team
@@ -25,30 +25,317 @@ Requires-Dist: requests>=2.32.3
 Requires-Dist: langchain>=0.3.1
 Requires-Dist: langchain-groq>=0.2.0
 Requires-Dist: langchain-community>=0.3.1
+Requires-Dist: markdown2>=2.5.0
 Requires-Dist: faiss-cpu>=1.8.0.post1
 Requires-Dist: ollama>=0.3.3
 Provides-Extra: dev
 Requires-Dist: pytest>=7.3.1; extra == "dev"
 Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
 
-# PocketGroq v0.4.1
-
-PocketGroq provides a simpler interface to interact with the Groq API, aiding in rapid development by abstracting complex API calls into simple functions. Version 0.4.1 introduces powerful Retrieval-Augmented Generation (RAG) capabilities, enhancing its ability to provide context-aware responses. It also includes a WebTool for web searches and content retrieval, and Chain of Thought (CoT) reasoning capabilities, making it even more versatile for complex problem-solving tasks.
-
+# PocketGroq v0.4.5: Enhanced Web Capabilities and Flexible Ollama Integration
 ![PocketGroq Logo](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
 
-## What's New in v0.4.1
+## What's New in v0.4.5
 
-- **Retrieval-Augmented Generation (RAG)**: Enhance responses with context from external documents and web pages. (Requires Ollama server for embeddings)
-- **Improved Document Handling**: Load and query both local and web-based documents.
-- **Context-Aware Generation**: Generate responses that leverage loaded document context.
+PocketGroq v0.4.5 brings significant enhancements to web-related functionalities and improves the flexibility of Ollama integration:
+
+- **Advanced Web Scraping**: Improved capabilities for crawling websites and extracting content.
+- **Flexible Ollama Integration**: PocketGroq now operates more flexibly with or without an active Ollama server.
+- **Enhanced Web Search**: Upgraded web search functionality with more robust result parsing.
+- **Improved Error Handling**: Better management of web-related errors and Ollama server status.
+- **Updated Test Suite**: Comprehensive tests for new web capabilities and Ollama integration.
+
+## Web Capabilities
+
+### Web Crawling
+
+PocketGroq now offers advanced web crawling capabilities:
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+
+# Crawl a website
+results = groq.crawl_website(
+    "https://example.com",
+    formats=["markdown", "html"],
+    max_depth=2,
+    max_pages=5
+)
+
+for page in results:
+    print(f"URL: {page['url']}")
+    print(f"Title: {page['metadata']['title']}")
+    print(f"Markdown content: {page['markdown'][:100]}...")  # First 100 characters
+    print("---")
+```
+
+### URL Scraping
+
+Extract content from a single URL in various formats:
+
+```python
+url = "https://example.com"
+result = groq.scrape_url(url, formats=["markdown", "html", "structured_data"])
+
+print(f"Markdown content length: {len(result['markdown'])}")
+print(f"HTML content length: {len(result['html'])}")
+if 'structured_data' in result:
+    print("Structured data:", json.dumps(result['structured_data'], indent=2))
+```
+
+### Enhanced Web Search
+
+Perform web searches with improved result parsing:
+
+```python
+query = "Latest developments in AI"
+search_results = groq.web_search(query)
+
+for result in search_results:
+    print(f"Title: {result['title']}")
+    print(f"URL: {result['url']}")
+    print(f"Description: {result['description']}")
+    print("---")
+```
+
+## Flexible Ollama Integration
+
+PocketGroq v0.4.5 introduces more flexible integration with Ollama:
+
+- **Optional Ollama**: Core features of PocketGroq now work without requiring an active Ollama server.
+- **Graceful Degradation**: When Ollama is not available, PocketGroq provides clear error messages for Ollama-dependent features.
+- **Persistent Features**: Ollama is still required for certain persistence features, including RAG functionality.
+
+### Initializing RAG with Flexible Ollama Integration
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+
+try:
+    groq.initialize_rag()
+    print("RAG initialized successfully with Ollama.")
+except OllamaServerNotRunningError:
+    print("Ollama server is not running. RAG features will be limited.")
+    # Proceed with non-RAG features
+```
+
+## Error Handling
+
+PocketGroq v0.4.5 introduces a new exception for Ollama-related errors:
+
+```python
+from pocketgroq import GroqProvider, OllamaServerNotRunningError
+
+groq = GroqProvider()
+
+try:
+    groq.initialize_rag()
+    # Use RAG features
+except OllamaServerNotRunningError:
+    print("Ollama server is not running. Proceeding with limited functionality.")
+    # Use non-RAG features
+```
+
+## Updated Test Suite
+
+The test suite has been expanded to cover the new web capabilities and Ollama integration:
+
+```python
+# In test.py
+
+def test_web_search():
+    print("\nTesting Web Search...")
+    query = "What is PocketGroq?"
+    results = groq.web_search(query)
+    print(f"Search query: {query}")
+    print(f"Number of results: {len(results)}")
+    assert isinstance(results, list) and len(results) > 0
+    print("First result:", results[0])
+
+def test_crawl_website():
+    print("\nTesting Website Crawling...")
+    url = "https://example.com"
+    results = groq.crawl_website(url, formats=["markdown", "html"], max_depth=2, max_pages=5)
+    print(f"Crawl results for {url}:")
+    print(f"Number of pages crawled: {len(results)}")
+    assert isinstance(results, list) and len(results) > 0
+    print("First page title:", results[0]['metadata']['title'])
+
+def test_scrape_url():
+    print("\nTesting URL Scraping...")
+    url = "https://example.com"
+    result = groq.scrape_url(url, formats=["markdown", "html", "structured_data"])
+    print(f"Scrape result for {url}:")
+    assert isinstance(result, dict) and 'markdown' in result and 'html' in result
+    print("Markdown content length:", len(result['markdown']))
+    print("HTML content length:", len(result['html']))
+    if 'structured_data' in result:
+        print("Structured data:", json.dumps(result['structured_data'], indent=
+
+
+
+## Version 0.4.3 Update
+
+In this latest version (0.4.3), we've made significant improvements to how PocketGroq interacts with the Ollama server:
+
+- **Flexible Ollama Dependency**: PocketGroq no longer requires Ollama to be running all the time. This allows for more versatile use of the library's core features.
+
+- **Persistent Features**: Users should be aware that Ollama will need to be running to take advantage of various persistence features, including RAG (Retrieval-Augmented Generation) functionality.
+
+- **Graceful Handling**: When Ollama-dependent features are accessed without the server running, PocketGroq will now provide clear error messages, allowing users to start the server and retry their request.
+
+
+### Conversational Persistence
+
+PocketGroq supports maintaining conversation history across multiple interactions, allowing for more coherent and context-aware dialogues.
+
+#### Simple Usage:
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+
+# Start a new conversation
+session_id = "user_123"
+groq.start_conversation(session_id)
+
+# First interaction
+response1 = groq.generate("What is the capital of France?", session_id=session_id)
+print("Response 1:", response1)
+
+# Second interaction (context-aware)
+response2 = groq.generate("What is its population?", session_id=session_id)
+print("Response 2:", response2)
+
+# End the conversation when done
+groq.end_conversation(session_id)
+```
+
+#### Advanced Usage:
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+
+def chat_session(topic):
+    session_id = f"chat_{topic}"
+    groq.start_conversation(session_id)
+    
+    print(f"Starting chat session about {topic}")
+    
+    while True:
+        user_input = input("You: ")
+        if user_input.lower() == 'exit':
+            break
+        
+        response = groq.generate(user_input, session_id=session_id)
+        print("AI:", response)
+    
+    groq.end_conversation(session_id)
+    print("Chat session ended")
+
+# Example usage
+chat_session("space exploration")
+```
+
+### Enhanced RAG with Persistence
+
+PocketGroq's RAG capabilities now support persistent storage of document embeddings, allowing for faster querying and reduced processing time for repeated operations.
+
+#### Simple Usage:
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider(rag_persistent=True, rag_index_path="my_persistent_index.pkl")
+
+# Initialize RAG
+groq.initialize_rag()
+
+# Load documents (will be stored persistently)
+groq.load_documents("https://en.wikipedia.org/wiki/Artificial_intelligence")
+groq.load_documents("path/to/local/document.txt")
+
+# Query documents
+query = "What are the main applications of AI?"
+response = groq.query_documents(query)
+print(response)
+```
+
+#### Advanced Usage: Research Assistant
+
+```python
+from pocketgroq import GroqProvider
+
+class ResearchAssistant:
+    def __init__(self):
+        self.groq = GroqProvider(rag_persistent=True, rag_index_path="research_index.pkl")
+        self.groq.initialize_rag()
+
+    def load_source(self, source):
+        print(f"Loading source: {source}")
+        self.groq.load_documents(source)
+
+    def research(self, topic):
+        print(f"Researching: {topic}")
+        query = f"Provide a comprehensive summary of {topic} based on the loaded documents."
+        response = self.groq.query_documents(query)
+        return response
+
+    def generate_report(self, topic, research_summary):
+        prompt = f"Based on this research summary about {topic}, generate a detailed report:\n\n{research_summary}"
+        report = self.groq.generate(prompt, max_tokens=2000)
+        return report
+
+# Example usage
+assistant = ResearchAssistant()
+
+# Load multiple sources
+assistant.load_source("https://en.wikipedia.org/wiki/Climate_change")
+assistant.load_source("https://www.ipcc.ch/reports/")
+assistant.load_source("path/to/local/climate_study.pdf")
+
+# Perform research
+research_summary = assistant.research("Impact of climate change on biodiversity")
+print("\nResearch Summary:")
+print(research_summary)
+
+# Generate a report
+report = assistant.generate_report("Impact of climate change on biodiversity", research_summary)
+print("\nGenerated Report:")
+print(report)
+```
+
+## Benefits of New Persistence Features
+
+1. **Improved Context Awareness**: Conversation persistence allows for more natural, context-aware dialogues across multiple interactions.
+2. **Efficient Information Retrieval**: Persistent RAG reduces processing time for repeated queries on the same document set.
+3. **Enhanced User Experience**: Maintain coherent conversations and provide more accurate, contextually relevant responses.
+4. **Scalability**: Handle complex, multi-turn conversations and large document sets more effectively.
+5. **Flexibility**: Choose between persistent and non-persistent modes based on your application's needs.
+
+Upgrade to PocketGroq v0.4.3 today to leverage these powerful new persistence capabilities in your projects!
+
+## What's New in v0.4.3
+
+- **Conversation Persistence**: Maintain context across multiple interactions for more coherent dialogues.
+- **Enhanced Retrieval-Augmented Generation (RAG)**: Improve response accuracy with persistent document context.
+- **Improved Document Handling**: Load and query both local and web-based documents with persistent storage options.
+- **Context-Aware Generation**: Generate responses that leverage both conversation history and loaded document context.
 - **Ollama Integration**: Utilizes Ollama for efficient, locally-generated embeddings in RAG functionality.
 
-For full details on the new RAG features and Ollama setup, see the [RAG Features](#rag-features) and [Ollama Server Requirement for RAG](#ollama-server-requirement-for-rag) sections below.
+For full details on the new persistence features and RAG enhancements, see the [Persistence Features](#persistence-features) and [RAG Features](#rag-features) sections below.
 
-# PocketGroq v0.4.1: Now with Retrieval-Augmented Generation (RAG)!
 
-PocketGroq has been upgraded to version 0.4.1, introducing powerful Retrieval-Augmented Generation (RAG) capabilities. This major update enhances PocketGroq's ability to provide context-aware responses by leveraging external knowledge sources.
+# PocketGroq v0.4.3: Now with Retrieval-Augmented Generation (RAG)!
+
+PocketGroq has been upgraded to version 0.4.3, introducing powerful Retrieval-Augmented Generation (RAG) capabilities. This major update enhances PocketGroq's ability to provide context-aware responses by leveraging external knowledge sources.
 
 ## New RAG Features
 
@@ -58,6 +345,7 @@ PocketGroq has been upgraded to version 0.4.1, introducing powerful Retrieval-Au
 from pocketgroq import GroqProvider
 
 groq = GroqProvider()
+
 groq.initialize_rag()  # Initialize RAG with default settings
 ```
 
@@ -65,9 +353,11 @@ groq.initialize_rag()  # Initialize RAG with default settings
 
 ```python
 # Load a local document
+
 groq.load_documents("path/to/local/document.txt")
 
 # Load content from a web page
+
 groq.load_documents("https://example.com/article")
 ```
 
@@ -93,11 +383,15 @@ print(response)
 from pocketgroq import GroqProvider
 
 groq = GroqProvider()
+
 groq.initialize_rag()
 
 # Load multiple sources
+
 groq.load_documents("https://en.wikipedia.org/wiki/Renewable_energy")
+
 groq.load_documents("https://www.energy.gov/eere/renewables")
+
 groq.load_documents("path/to/local/energy_report.pdf")
 
 # Perform a complex query
@@ -120,7 +414,7 @@ This RAG functionality allows PocketGroq to:
 - Provide more accurate and context-aware information
 - Support complex research and analysis tasks
 
-Upgrade to PocketGroq v0.4.1 today to leverage these powerful new RAG capabilities in your projects!
+Upgrade to PocketGroq v0.4.3 today to leverage these powerful new RAG capabilities in your projects!
 
 ## Other New Features
 
@@ -182,7 +476,7 @@ This will fetch and install the most recent version of PocketGroq from PyPI, alo
 To upgrade to a specific version, you can specify the version number:
 
 ```bash
-pip install --upgrade pocketgroq==0.3.0
+pip install --upgrade pocketgroq==0.4.5
 ```
 
 After upgrading, it's a good idea to verify the installed version:
@@ -202,6 +496,7 @@ from pocketgroq import GroqProvider
 from pocketgroq.web_tool import WebTool
 
 # Initialize the GroqProvider
+
 groq = GroqProvider()
 
 # Initialize the WebTool
@@ -359,6 +654,7 @@ class Recipe(BaseModel):
     ingredients: List[Ingredient]
     directions: List[str]
 
+
 def get_recipe(recipe_name: str) -> Recipe:
     response = groq.generate(
         prompt=f"Fetch a recipe for {recipe_name}",
@@ -368,6 +664,7 @@ def get_recipe(recipe_name: str) -> Recipe:
         json_mode=True
     )
     return Recipe.parse_raw(response)
+
 
 def print_recipe(recipe: Recipe):
     print("Recipe:", recipe.recipe_name)
@@ -387,8 +684,10 @@ print_recipe(recipe)
 PocketGroq allows you to define tools (functions) that the model can use during the conversation:
 
 ```python
+
 def reverse_string(input_string: str) -> dict:
     return {"reversed_string": input_string[::-1]}
+
 
 tools = [
     {
@@ -421,9 +720,11 @@ print("Response:", response)
 from pocketgroq import GroqProvider
 import base64
 
+
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
+
 
 groq = GroqProvider()
 
@@ -657,7 +958,7 @@ Each test demonstrates a specific feature of PocketGroq and checks if the output
 
 ## Ollama Server Requirement for RAG
 
-The new Retrieval-Augmented Generation (RAG) feature in PocketGroq v0.4.1 requires an Ollama server for generating embeddings. Ollama is an open-source, locally-run language model server that provides fast and efficient embeddings for RAG functionality.
+The new Retrieval-Augmented Generation (RAG) feature in PocketGroq v0.4.3 requires an Ollama server for generating embeddings. Ollama is an open-source, locally-run language model server that provides fast and efficient embeddings for RAG functionality.
 
 ### Setting up Ollama
 
@@ -681,7 +982,9 @@ The new Retrieval-Augmented Generation (RAG) feature in PocketGroq v0.4.1 requir
 By default, PocketGroq will attempt to connect to the Ollama server at `http://localhost:11434`. If your Ollama server is running on a different address or port, you can specify this when initializing RAG:
 
 ```python
+
 groq = GroqProvider()
+
 groq.initialize_rag(ollama_base_url="http://your-ollama-server:port")
 ```
 
