@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pocketgroq",
-    version="0.4.3",  # Incremented the version number
+    version="0.4.5",  # Incremented the version number
     author="PocketGroq Team",
     author_email="pocketgroq@example.com",
     description="A library for easy integration with Groq API, including image handling and Chain of Thought reasoning",
@@ -38,6 +38,7 @@ setup(
         "langchain>=0.3.1",
         "langchain-groq>=0.2.0",
         "langchain-community>=0.3.1",
+        "markdown2>=2.5.0"
         "faiss-cpu>=1.8.0.post1",
         "ollama>=0.3.3",
     ],

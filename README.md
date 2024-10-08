@@ -1,9 +1,9 @@
-# PocketGroq v0.4.4: Enhanced Web Capabilities and Flexible Ollama Integration
+# PocketGroq v0.4.5: Enhanced Web Capabilities and Flexible Ollama Integration
 ![PocketGroq Logo](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
 
-## What's New in v0.4.4
+## What's New in v0.4.5
 
-PocketGroq v0.4.4 brings significant enhancements to web-related functionalities and improves the flexibility of Ollama integration:
+PocketGroq v0.4.5 brings significant enhancements to web-related functionalities and improves the flexibility of Ollama integration:
 
 - **Advanced Web Scraping**: Improved capabilities for crawling websites and extracting content.
 - **Flexible Ollama Integration**: PocketGroq now operates more flexibly with or without an active Ollama server.
@@ -68,7 +68,7 @@ for result in search_results:
 
 ## Flexible Ollama Integration
 
-PocketGroq v0.4.4 introduces more flexible integration with Ollama:
+PocketGroq v0.4.5 introduces more flexible integration with Ollama:
 
 - **Optional Ollama**: Core features of PocketGroq now work without requiring an active Ollama server.
 - **Graceful Degradation**: When Ollama is not available, PocketGroq provides clear error messages for Ollama-dependent features.
@@ -91,7 +91,7 @@ except OllamaServerNotRunningError:
 
 ## Error Handling
 
-PocketGroq v0.4.4 introduces a new exception for Ollama-related errors:
+PocketGroq v0.4.5 introduces a new exception for Ollama-related errors:
 
 ```python
 from pocketgroq import GroqProvider, OllamaServerNotRunningError
@@ -442,7 +442,7 @@ This will fetch and install the most recent version of PocketGroq from PyPI, alo
 To upgrade to a specific version, you can specify the version number:
 
 ```bash
-pip install --upgrade pocketgroq==0.4.4
+pip install --upgrade pocketgroq==0.4.5
 ```
 
 After upgrading, it's a good idea to verify the installed version:
