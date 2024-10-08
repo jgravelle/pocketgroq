@@ -1,5 +1,148 @@
-# PocketGroq v0.4.3: Now with Conversation Persistence and Enhanced RAG!
+# PocketGroq v0.4.4: Enhanced Web Capabilities and Flexible Ollama Integration
 ![PocketGroq Logo](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
+
+## What's New in v0.4.4
+
+PocketGroq v0.4.4 brings significant enhancements to web-related functionalities and improves the flexibility of Ollama integration:
+
+- **Advanced Web Scraping**: Improved capabilities for crawling websites and extracting content.
+- **Flexible Ollama Integration**: PocketGroq now operates more flexibly with or without an active Ollama server.
+- **Enhanced Web Search**: Upgraded web search functionality with more robust result parsing.
+- **Improved Error Handling**: Better management of web-related errors and Ollama server status.
+- **Updated Test Suite**: Comprehensive tests for new web capabilities and Ollama integration.
+
+## Web Capabilities
+
+### Web Crawling
+
+PocketGroq now offers advanced web crawling capabilities:
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+
+# Crawl a website
+results = groq.crawl_website(
+    "https://example.com",
+    formats=["markdown", "html"],
+    max_depth=2,
+    max_pages=5
+)
+
+for page in results:
+    print(f"URL: {page['url']}")
+    print(f"Title: {page['metadata']['title']}")
+    print(f"Markdown content: {page['markdown'][:100]}...")  # First 100 characters
+    print("---")
+```
+
+### URL Scraping
+
+Extract content from a single URL in various formats:
+
+```python
+url = "https://example.com"
+result = groq.scrape_url(url, formats=["markdown", "html", "structured_data"])
+
+print(f"Markdown content length: {len(result['markdown'])}")
+print(f"HTML content length: {len(result['html'])}")
+if 'structured_data' in result:
+    print("Structured data:", json.dumps(result['structured_data'], indent=2))
+```
+
+### Enhanced Web Search
+
+Perform web searches with improved result parsing:
+
+```python
+query = "Latest developments in AI"
+search_results = groq.web_search(query)
+
+for result in search_results:
+    print(f"Title: {result['title']}")
+    print(f"URL: {result['url']}")
+    print(f"Description: {result['description']}")
+    print("---")
+```
+
+## Flexible Ollama Integration
+
+PocketGroq v0.4.4 introduces more flexible integration with Ollama:
+
+- **Optional Ollama**: Core features of PocketGroq now work without requiring an active Ollama server.
+- **Graceful Degradation**: When Ollama is not available, PocketGroq provides clear error messages for Ollama-dependent features.
+- **Persistent Features**: Ollama is still required for certain persistence features, including RAG functionality.
+
+### Initializing RAG with Flexible Ollama Integration
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+
+try:
+    groq.initialize_rag()
+    print("RAG initialized successfully with Ollama.")
+except OllamaServerNotRunningError:
+    print("Ollama server is not running. RAG features will be limited.")
+    # Proceed with non-RAG features
+```
+
+## Error Handling
+
+PocketGroq v0.4.4 introduces a new exception for Ollama-related errors:
+
+```python
+from pocketgroq import GroqProvider, OllamaServerNotRunningError
+
+groq = GroqProvider()
+
+try:
+    groq.initialize_rag()
+    # Use RAG features
+except OllamaServerNotRunningError:
+    print("Ollama server is not running. Proceeding with limited functionality.")
+    # Use non-RAG features
+```
+
+## Updated Test Suite
+
+The test suite has been expanded to cover the new web capabilities and Ollama integration:
+
+```python
+# In test.py
+
+def test_web_search():
+    print("\nTesting Web Search...")
+    query = "What is PocketGroq?"
+    results = groq.web_search(query)
+    print(f"Search query: {query}")
+    print(f"Number of results: {len(results)}")
+    assert isinstance(results, list) and len(results) > 0
+    print("First result:", results[0])
+
+def test_crawl_website():
+    print("\nTesting Website Crawling...")
+    url = "https://example.com"
+    results = groq.crawl_website(url, formats=["markdown", "html"], max_depth=2, max_pages=5)
+    print(f"Crawl results for {url}:")
+    print(f"Number of pages crawled: {len(results)}")
+    assert isinstance(results, list) and len(results) > 0
+    print("First page title:", results[0]['metadata']['title'])
+
+def test_scrape_url():
+    print("\nTesting URL Scraping...")
+    url = "https://example.com"
+    result = groq.scrape_url(url, formats=["markdown", "html", "structured_data"])
+    print(f"Scrape result for {url}:")
+    assert isinstance(result, dict) and 'markdown' in result and 'html' in result
+    print("Markdown content length:", len(result['markdown']))
+    print("HTML content length:", len(result['html']))
+    if 'structured_data' in result:
+        print("Structured data:", json.dumps(result['structured_data'], indent=
+
+
 
 ## Version 0.4.3 Update
 
@@ -299,7 +442,7 @@ This will fetch and install the most recent version of PocketGroq from PyPI, alo
 To upgrade to a specific version, you can specify the version number:
 
 ```bash
-pip install --upgrade pocketgroq==0.3.0
+pip install --upgrade pocketgroq==0.4.4
 ```
 
 After upgrading, it's a good idea to verify the installed version:
@@ -876,4 +1019,3 @@ This project is licensed under the MIT License. When using PocketGroq in your pr
 ---
 
 Thank you for using PocketGroq! We hope this tool enhances your development process and enables you to create amazing AI-powered applications with ease. If you have any questions or need further assistance, don't hesitate to reach out to the community or check the documentation. Happy coding!
-

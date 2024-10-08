@@ -1,5 +1,3 @@
-# test.py
-
 import asyncio
 import json
 import logging
@@ -9,25 +7,22 @@ import tempfile
 import uuid
 
 from typing import List, Optional, Union
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from pocketgroq import GroqProvider, GroqAPIKeyMissingError, GroqAPIError
 
 DEBUG = False
 logging.basicConfig(level=logging.FATAL)
-if DEBUG:
-    logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
-# Initialize the GroqProvider with RAG persistence enabled by default
+if DEBUG:
+    logger.setLevel(logging.DEBUG)
+
 groq = GroqProvider(rag_persistent=True, rag_index_path="faiss_persistent_index.pkl")
 
-# Generate a unique session ID for testing persistent conversations
 PERSISTENT_SESSION_ID = str(uuid.uuid4())
 DISPOSABLE_SESSION_ID = str(uuid.uuid4())
 
 def start_conversations():
-    """
-    Initialize conversation sessions for persistent and disposable modes.
-    """
     groq.start_conversation(PERSISTENT_SESSION_ID)
     groq.start_conversation(DISPOSABLE_SESSION_ID)
 
@@ -132,7 +127,8 @@ def test_json_mode():
         quantity: Union[int, str]
         quantity_unit: Optional[str]
 
-        @validator('quantity', pre=True)
+        @field_validator('quantity', mode='before')
+        @classmethod
         def quantity_to_string(cls, v):
             return str(v)
 
@@ -152,14 +148,9 @@ def test_json_mode():
         logger.debug(f"Raw JSON response: {response}")
         
         try:
-            # Parse the JSON response
             json_data = json.loads(response)
-            
-            # Check if the recipe is nested under a 'recipe' key
             if 'recipe' in json_data:
                 json_data = json_data['recipe']
-            
-            # Attempt to create a Recipe object
             recipe = Recipe.model_validate(json_data)
             return recipe
         except json.JSONDecodeError as e:
@@ -213,7 +204,6 @@ def test_tool_usage():
         }
     ]
 
-    # Register the tool implementation
     groq.register_tool("reverse_string", reverse_string)
 
     response = groq.generate("Please reverse the string 'hello world'", tools=tools)
@@ -222,7 +212,6 @@ def test_tool_usage():
 
 def test_vision():
     print("\nTesting Vision...")
-    # Note: This test requires a valid image URL
     image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/320px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
     response_url = groq.generate(
         prompt="Describe this image in one sentence.",
@@ -270,14 +259,13 @@ def test_cot_synthesis():
 def test_rag_initialization():
     print("\nTesting RAG Initialization...")
     try:
-        # Ensure Ollama is running
         try:
             subprocess.run(["ollama", "list"], check=True, capture_output=True)
         except subprocess.CalledProcessError:
             print("Ollama is not running. Please start Ollama service.")
             return
 
-        groq.initialize_rag()  # Use default Ollama URL and model
+        groq.initialize_rag()
         print("RAG initialized successfully.")
         assert groq.rag_manager is not None
     except Exception as e:
@@ -288,23 +276,20 @@ def test_document_loading(persistent: bool = True):
     mode = "Persistent" if persistent else "Disposable"
     print(f"\nTesting Document Loading in {mode} Mode...")
     try:
-        # Load documents with specified persistence
         def progress_callback(current, total):
             print(f"Processing document chunks: {current}/{total}")
 
-        # Create a temporary file with some content
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as temp_file:
             temp_file.write("This is a test document about artificial intelligence and machine learning.")
             temp_file_path = temp_file.name
 
-        groq.load_documents(temp_file_path, progress_callback=progress_callback, timeout=60, persistent=persistent)  # 1-minute timeout
+        groq.load_documents(temp_file_path, progress_callback=progress_callback, timeout=60, persistent=persistent)
         print("Local document loaded successfully.")
         assert groq.rag_manager.vector_store is not None
 
-        # Test loading from a URL with a shorter timeout
         try:
             groq.load_documents("https://en.wikipedia.org/wiki/Artificial_intelligence", 
-                                progress_callback=progress_callback, timeout=120, persistent=persistent)  # 2-minute timeout
+                                progress_callback=progress_callback, timeout=120, persistent=persistent)
             print("Web document loaded successfully.")
         except TimeoutError:
             print("Web document loading timed out, but local document was processed successfully.")
@@ -314,7 +299,6 @@ def test_document_loading(persistent: bool = True):
         print(f"Failed to load document: {e}")
         raise
     finally:
-        # Clean up the temporary file
         os.unlink(temp_file_path)
 
 def test_document_querying():
@@ -331,9 +315,8 @@ def test_document_querying():
 
 def test_rag_error_handling():
     print("\nTesting RAG Error Handling...")
-    # Reset GroqProvider to ensure RAG is not initialized
     global groq
-    groq = GroqProvider(rag_persistent=False)  # Initialize without RAG persistence
+    groq = GroqProvider(rag_persistent=False)
     
     try:
         groq.query_documents("This should fail")
@@ -351,38 +334,17 @@ def test_rag_error_handling():
     else:
         raise AssertionError("Expected ValueError was not raised")
     
-def test_generate_with_reflection():
-    print("\nTesting Generate with Reflection...")
-    prompt = "Explain the concept of quantum entanglement in simple terms."
-    response, is_satisfactory = groq.generate_with_reflection(
-        prompt=prompt,
-        model="llama3-8b-8192",
-        temperature=0.5,
-        max_tokens=1024,
-        top_p=1,
-        stop=None,
-        stream=False
-    )
-    print("Prompt:", prompt)
-    print("Response:", response)
-    print("Is satisfactory:", is_satisfactory)
-    assert isinstance(response, str) and len(response) > 0
-    assert isinstance(is_satisfactory, bool)
-
 def test_persistent_conversation():
     print("\nTesting Persistent Conversation...")
     session_id = PERSISTENT_SESSION_ID
-    # Ensure the session is started
     groq.start_conversation(session_id)
     
-    # First user message
     user_message1 = "What is the capital of Ohio?"
     response1 = groq.generate(prompt=user_message1, session_id=session_id)
     print(f"User: {user_message1}")
     print(f"PG: {response1}")
     assert isinstance(response1, str) and len(response1) > 0
 
-    # Second user message, expecting context-aware response
     user_message2 = "What is its population?"
     response2 = groq.generate(prompt=user_message2, session_id=session_id)
     print(f"\nUser: {user_message2}")
@@ -392,24 +354,57 @@ def test_persistent_conversation():
 def test_disposable_conversation():
     print("\nTesting Disposable Conversation...")
     session_id = DISPOSABLE_SESSION_ID
-    # Ensure the session is started
     groq.start_conversation(session_id)
     
-    # First user message
     user_message1 = "What is the capital of Ohio?"
     response1 = groq.generate(prompt=user_message1, session_id=session_id)
     print(f"User: {user_message1}")
     print(f"PG: {response1}")
     assert isinstance(response1, str) and len(response1) > 0
 
-    # Second user message, expecting non-context-aware response
     user_message2 = "What is its population?"
-    # Reset the conversation to make it disposable
     groq.reset_conversation(session_id)
     response2 = groq.generate(prompt=user_message2, session_id=session_id)
     print(f"\nUser: {user_message2}")
     print(f"PG: {response2}")
     assert isinstance(response2, str) and len(response2) > 0
+
+def test_web_search():
+    print("\nTesting Web Search...")
+    query = "What is PocketGroq?"
+    results = groq.web_search(query)
+    print(f"Search query: {query}")
+    print(f"Number of results: {len(results)}")
+    assert isinstance(results, list) and len(results) > 0
+    print("First result:", results[0])
+
+def test_get_web_content():
+    print("\nTesting Get Web Content...")
+    url = "https://yahoo.com"
+    content = groq.get_web_content(url)
+    print(f"Content length for {url}: {len(content)} characters")
+    assert isinstance(content, str) and len(content) > 0
+    print("First 100 characters:", content[:100])
+
+def test_crawl_website():
+    print("\nTesting Website Crawling...")
+    url = "https://yahoo.com"
+    results = groq.crawl_website(url, formats=["markdown", "html"], max_depth=2, max_pages=5)
+    print(f"Crawl results for {url}:")
+    print(f"Number of pages crawled: {len(results)}")
+    assert isinstance(results, list) and len(results) > 0
+    print("First page title:", results[0]['metadata']['title'])
+
+def test_scrape_url():
+    print("\nTesting URL Scraping...")
+    url = "https://yahoo.com"
+    result = groq.scrape_url(url, formats=["markdown", "html", "structured_data"])
+    print(f"Scrape result for {url}:")
+    assert isinstance(result, dict) and 'markdown' in result and 'html' in result
+    print("Markdown content length:", len(result['markdown']))
+    print("HTML content length:", len(result['html']))
+    if 'structured_data' in result:
+        print("Structured data:", json.dumps(result['structured_data'], indent=2))
 
 def display_menu():
     print("\nPocketGroq Test Menu:")
@@ -431,19 +426,23 @@ def display_menu():
     print("16. Test RAG Error Handling")
     print("17. Test Persistent Conversation")
     print("18. Test Disposable Conversation")
-    print("19. Run All RAG Tests")
-    print("20. Run All Conversation Tests")
-    print("21. Generate with Reflection")  # New menu option
-    print("22. Run All Tests")  # Shifted down
+    print("19. Web Search")
+    print("20. Get Web Content")
+    print("21. Crawl Website")
+    print("22. Scrape URL")
+
+    print("23. Run All Web Tests")
+    print("24. Run All RAG Tests")
+    print("25. Run All Conversation Tests")
+    print("26. Run All Tests")
     print("0. Exit")
 
 async def main():
-    # Start conversation sessions
     start_conversations()
     
     while True:
         display_menu()
-        choice = input("Enter your choice (0-22): ")
+        choice = input("Enter your choice (0-27): ")
         
         try:
             if choice == '0':
@@ -485,19 +484,30 @@ async def main():
             elif choice == '18':
                 test_disposable_conversation()
             elif choice == '19':
+                test_web_search()
+            elif choice == '20':
+                test_get_web_content()
+            elif choice == '21':
+                test_crawl_website()
+            elif choice == '22':
+                test_scrape_url()
+            elif choice == '23':
+                test_web_search()
+                test_get_web_content()
+                test_crawl_website()
+                test_scrape_url()
+                print("\nAll Web tests completed successfully!")
+            elif choice == '24':
                 test_rag_initialization()
                 test_document_loading(persistent=True)
                 test_document_querying()
                 test_rag_error_handling()
                 print("\nAll RAG tests completed successfully!")
-            elif choice == '20':
+            elif choice == '25':
                 test_persistent_conversation()
                 test_disposable_conversation()
                 print("\nAll Conversation tests completed successfully!")
-            elif choice == '21':
-                test_generate_with_reflection()  # New test function
-            elif choice == '22':  # Shifted down
-                # ... (run all tests, including the new one)
+            elif choice == '26':
                 test_basic_chat_completion()
                 test_streaming_chat_completion()
                 test_override_default_model()
@@ -516,7 +526,10 @@ async def main():
                 test_rag_error_handling()
                 test_persistent_conversation()
                 test_disposable_conversation()
-                test_generate_with_reflection()  # Added new test
+                test_web_search()
+                test_get_web_content()
+                test_crawl_website()
+                test_scrape_url()
                 print("\nAll tests completed successfully!")
             else:
                 print("Invalid choice. Please try again.")

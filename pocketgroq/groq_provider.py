@@ -13,6 +13,7 @@ from langchain_groq import ChatGroq
 from langchain_community.embeddings import OllamaEmbeddings
 from typing import Callable, Dict, Any, List, Union, AsyncIterator, Optional
 
+from .enhanced_web_tool import EnhancedWebTool
 from .exceptions import GroqAPIKeyMissingError, GroqAPIError, OllamaServerNotRunningError
 from .web_tool import WebTool
 from .chain_of_thought.cot_manager import ChainOfThoughtManager
@@ -38,6 +39,7 @@ class GroqProvider(LLMInterface):
         self.tools = {}
         self.rag_persistent = rag_persistent
         self.rag_index_path = rag_index_path
+        self.enhanced_web_tool = EnhancedWebTool()
 
         # Initialize conversation sessions
         self.conversation_sessions = defaultdict(list)  # session_id -> list of messages
@@ -49,6 +51,23 @@ class GroqProvider(LLMInterface):
                 self.initialize_rag(index_path=self.rag_index_path)
         else:
             logger.warning("Ollama server is not running. RAG functionality will be limited.")
+
+    def crawl_website(self, url: str, formats: List[str] = ["markdown"], max_depth: int = 3, max_pages: int = 100) -> List[Dict[str, Any]]:
+        """
+        Crawl a website and return its content in specified formats.
+        
+        Args:
+            url (str): The starting URL to crawl.
+            formats (List[str]): List of desired output formats (e.g., ["markdown", "html", "structured_data"]).
+            max_depth (int): Maximum depth to crawl.
+            max_pages (int): Maximum number of pages to crawl.
+        
+        Returns:
+            List[Dict[str, Any]]: List of crawled pages with their content in specified formats.
+        """
+        self.enhanced_web_tool.max_depth = max_depth
+        self.enhanced_web_tool.max_pages = max_pages
+        return self.enhanced_web_tool.crawl(url, formats)
 
     def is_ollama_server_running(self) -> bool:
         """Check if the Ollama server is running."""
@@ -68,6 +87,19 @@ class GroqProvider(LLMInterface):
 
     def register_tool(self, name: str, func: callable):
         self.tools[name] = func
+
+    def scrape_url(self, url: str, formats: List[str] = ["markdown"]) -> Dict[str, Any]:
+        """
+        Scrape a single URL and return its content in specified formats.
+        
+        Args:
+            url (str): The URL to scrape.
+            formats (List[str]): List of desired output formats (e.g., ["markdown", "html", "structured_data"]).
+        
+        Returns:
+            Dict[str, Any]: The scraped content in specified formats.
+        """
+        return self.enhanced_web_tool.scrape_page(url, formats)
 
     def end_conversation(self, conversation_id: str):
         """

@@ -409,24 +409,6 @@ def test_rag_error_handling():
     else:
         raise AssertionError("Expected ValueError was not raised")
     
-def test_generate_with_reflection():
-    print("\nTesting Generate with Reflection...")
-    prompt = "Explain the concept of quantum entanglement in simple terms."
-    response, is_satisfactory = groq.generate_with_reflection(
-        prompt=prompt,
-        model="llama3-8b-8192",
-        temperature=0.5,
-        max_tokens=1024,
-        top_p=1,
-        stop=None,
-        stream=False
-    )
-    print("Prompt:", prompt)
-    print("Response:", response)
-    print("Is satisfactory:", is_satisfactory)
-    assert isinstance(response, str) and len(response) > 0
-    assert isinstance(is_satisfactory, bool)
-
 def test_persistent_conversation():
     print("\nTesting Persistent Conversation...")
     session_id = PERSISTENT_SESSION_ID
@@ -469,125 +451,10 @@ def test_disposable_conversation():
     print(f"PG: {response2}")
     assert isinstance(response2, str) and len(response2) > 0
 
-def display_menu():
-    print("\nPocketGroq Test Menu:")
-    print("1. Basic Chat Completion")
-    print("2. Streaming Chat Completion")
-    print("3. Override Default Model")
-    print("4. Chat Completion with Stop Sequence")
-    print("5. Asynchronous Generation")
-    print("6. Streaming Async Chat Completion")
-    print("7. JSON Mode")
-    print("8. Tool Usage")
-    print("9. Vision")
-    print("10. Chain of Thought Problem Solving")
-    print("11. Chain of Thought Step Generation")
-    print("12. Chain of Thought Synthesis")
-    print("13. Test RAG Initialization")
-    print("14. Test Document Loading")
-    print("15. Test Document Querying")
-    print("16. Test RAG Error Handling")
-    print("17. Test Persistent Conversation")
-    print("18. Test Disposable Conversation")
-    print("19. Run All RAG Tests")
-    print("20. Run All Conversation Tests")
-    print("21. Generate with Reflection")  # New menu option
-    print("22. Run All Tests")  # Shifted down
-    print("0. Exit")
 
 async def main():
     # Start conversation sessions
     start_conversations()
-    
-    while True:
-        display_menu()
-        choice = input("Enter your choice (0-22): ")
-        
-        try:
-            if choice == '0':
-                break
-            elif choice == '1':
-                test_basic_chat_completion()
-            elif choice == '2':
-                test_streaming_chat_completion()
-            elif choice == '3':
-                test_override_default_model()
-            elif choice == '4':
-                test_chat_completion_with_stop_sequence()
-            elif choice == '5':
-                await test_async_generation()
-            elif choice == '6':
-                await test_streaming_async_chat_completion()
-            elif choice == '7':
-                test_json_mode()
-            elif choice == '8':
-                test_tool_usage()
-            elif choice == '9':
-                test_vision()
-            elif choice == '10':
-                test_cot_problem_solving()
-            elif choice == '11':
-                test_cot_step_generation()
-            elif choice == '12':
-                test_cot_synthesis()
-            elif choice == '13':
-                test_rag_initialization()
-            elif choice == '14':
-                test_document_loading(persistent=True)
-            elif choice == '15':
-                test_document_querying()
-            elif choice == '16':
-                test_rag_error_handling()
-            elif choice == '17':
-                test_persistent_conversation()
-            elif choice == '18':
-                test_disposable_conversation()
-            elif choice == '19':
-                test_rag_initialization()
-                test_document_loading(persistent=True)
-                test_document_querying()
-                test_rag_error_handling()
-                print("\nAll RAG tests completed successfully!")
-            elif choice == '20':
-                test_persistent_conversation()
-                test_disposable_conversation()
-                print("\nAll Conversation tests completed successfully!")
-            elif choice == '21':
-                test_generate_with_reflection()  # New test function
-            elif choice == '22':  # Shifted down
-                # ... (run all tests, including the new one)
-                test_basic_chat_completion()
-                test_streaming_chat_completion()
-                test_override_default_model()
-                test_chat_completion_with_stop_sequence()
-                await test_async_generation()
-                await test_streaming_async_chat_completion()
-                test_json_mode()
-                test_tool_usage()
-                test_vision()
-                test_cot_problem_solving()
-                test_cot_step_generation()
-                test_cot_synthesis()
-                test_rag_initialization()
-                test_document_loading(persistent=True)
-                test_document_querying()
-                test_rag_error_handling()
-                test_persistent_conversation()
-                test_disposable_conversation()
-                test_generate_with_reflection()  # Added new test
-                print("\nAll tests completed successfully!")
-            else:
-                print("Invalid choice. Please try again.")
-        except GroqAPIKeyMissingError as e:
-            print(f"Error: {e}")
-        except GroqAPIError as e:
-            print(f"API Error: {e}")
-        except AssertionError as e:
-            print(f"Assertion Error: {e}")
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-        
-        input("\nPress Enter to continue...")
 
 if __name__ == "__main__":
     asyncio.run(main())
