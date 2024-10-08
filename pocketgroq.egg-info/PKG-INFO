@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: pocketgroq
-Version: 0.4.6
+Version: 0.4.7
 Summary: A library for easy integration with Groq API, including web scraping, image handling, and Chain of Thought reasoning
 Home-page: https://github.com/jgravelle/pocketgroq
 Author: PocketGroq Team

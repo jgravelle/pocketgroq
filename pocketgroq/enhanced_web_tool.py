@@ -2,9 +2,8 @@ import requests
 from bs4 import BeautifulSoup
 from typing import Dict, Any, List
 from urllib.parse import urlparse, urljoin
-import markdown2
+import html2text
 import json
-import re
 
 class EnhancedWebTool:
     def __init__(self, max_depth: int = 3, max_pages: int = 100):
@@ -13,6 +12,11 @@ class EnhancedWebTool:
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         }
+        self.html2text_converter = html2text.HTML2Text()
+        self.html2text_converter.ignore_links = False
+        self.html2text_converter.ignore_images = False
+        self.html2text_converter.ignore_emphasis = False
+        self.html2text_converter.body_width = 0  # Disable line wrapping
 
     def crawl(self, start_url: str, formats: List[str] = ["markdown"]) -> List[Dict[str, Any]]:
         visited = set()
@@ -89,12 +93,13 @@ class EnhancedWebTool:
         return metadata
 
     def html_to_markdown(self, html_content: str) -> str:
-        # Convert HTML to Markdown
-        markdown = markdown2.markdown(html_content)
+        # Convert HTML to Markdown using html2text
+        markdown = self.html2text_converter.handle(html_content)
         
         # Clean up the markdown
-        markdown = re.sub(r'\n{3,}', '\n\n', markdown)  # Remove excess newlines
-        markdown = re.sub(r'^\s+', '', markdown, flags=re.MULTILINE)  # Remove leading whitespace
+        markdown = markdown.strip()
+        
+        return markdown
         
         return markdown
 
