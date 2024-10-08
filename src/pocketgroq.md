@@ -9,10 +9,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pocketgroq",
-    version="0.4.3",  # Incremented the version number
+    version="0.4.6",  # Incremented the version number to 0.4.6
     author="PocketGroq Team",
     author_email="pocketgroq@example.com",
-    description="A library for easy integration with Groq API, including image handling and Chain of Thought reasoning",
+    description="A library for easy integration with Groq API, including web scraping, image handling, and Chain of Thought reasoning",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/jgravelle/pocketgroq",
@@ -31,7 +31,7 @@ setup(
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
     ],
-    packages=find_packages(exclude=["tests", "tests.*"]),
+    packages=find_packages(include=['pocketgroq', 'pocketgroq.*']),
     python_requires=">=3.7",
     install_requires=[
         "bs4>=0.0.2",
@@ -41,6 +41,7 @@ setup(
         "langchain>=0.3.1",
         "langchain-groq>=0.2.0",
         "langchain-community>=0.3.1",
+        "markdown2>=2.5.0",
         "faiss-cpu>=1.8.0.post1",
         "ollama>=0.3.3",
     ],
@@ -56,8 +57,6 @@ setup(
 # test.py
 
 ```python
-# test.py
-
 import asyncio
 import json
 import logging
@@ -67,25 +66,22 @@ import tempfile
 import uuid
 
 from typing import List, Optional, Union
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from pocketgroq import GroqProvider, GroqAPIKeyMissingError, GroqAPIError
 
 DEBUG = False
 logging.basicConfig(level=logging.FATAL)
-if DEBUG:
-    logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
-# Initialize the GroqProvider with RAG persistence enabled by default
+if DEBUG:
+    logger.setLevel(logging.DEBUG)
+
 groq = GroqProvider(rag_persistent=True, rag_index_path="faiss_persistent_index.pkl")
 
-# Generate a unique session ID for testing persistent conversations
 PERSISTENT_SESSION_ID = str(uuid.uuid4())
 DISPOSABLE_SESSION_ID = str(uuid.uuid4())
 
 def start_conversations():
-    """
-    Initialize conversation sessions for persistent and disposable modes.
-    """
     groq.start_conversation(PERSISTENT_SESSION_ID)
     groq.start_conversation(DISPOSABLE_SESSION_ID)
 
@@ -190,7 +186,8 @@ def test_json_mode():
         quantity: Union[int, str]
         quantity_unit: Optional[str]
 
-        @validator('quantity', pre=True)
+        @field_validator('quantity', mode='before')
+        @classmethod
         def quantity_to_string(cls, v):
             return str(v)
 
@@ -210,14 +207,9 @@ def test_json_mode():
         logger.debug(f"Raw JSON response: {response}")
         
         try:
-            # Parse the JSON response
             json_data = json.loads(response)
-            
-            # Check if the recipe is nested under a 'recipe' key
             if 'recipe' in json_data:
                 json_data = json_data['recipe']
-            
-            # Attempt to create a Recipe object
             recipe = Recipe.model_validate(json_data)
             return recipe
         except json.JSONDecodeError as e:
@@ -271,7 +263,6 @@ def test_tool_usage():
         }
     ]
 
-    # Register the tool implementation
     groq.register_tool("reverse_string", reverse_string)
 
     response = groq.generate("Please reverse the string 'hello world'", tools=tools)
@@ -280,7 +271,6 @@ def test_tool_usage():
 
 def test_vision():
     print("\nTesting Vision...")
-    # Note: This test requires a valid image URL
     image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/320px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
     response_url = groq.generate(
         prompt="Describe this image in one sentence.",
@@ -328,14 +318,13 @@ def test_cot_synthesis():
 def test_rag_initialization():
     print("\nTesting RAG Initialization...")
     try:
-        # Ensure Ollama is running
         try:
             subprocess.run(["ollama", "list"], check=True, capture_output=True)
         except subprocess.CalledProcessError:
             print("Ollama is not running. Please start Ollama service.")
             return
 
-        groq.initialize_rag()  # Use default Ollama URL and model
+        groq.initialize_rag()
         print("RAG initialized successfully.")
         assert groq.rag_manager is not None
     except Exception as e:
@@ -346,23 +335,20 @@ def test_document_loading(persistent: bool = True):
     mode = "Persistent" if persistent else "Disposable"
     print(f"\nTesting Document Loading in {mode} Mode...")
     try:
-        # Load documents with specified persistence
         def progress_callback(current, total):
             print(f"Processing document chunks: {current}/{total}")
 
-        # Create a temporary file with some content
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as temp_file:
             temp_file.write("This is a test document about artificial intelligence and machine learning.")
             temp_file_path = temp_file.name
 
-        groq.load_documents(temp_file_path, progress_callback=progress_callback, timeout=60, persistent=persistent)  # 1-minute timeout
+        groq.load_documents(temp_file_path, progress_callback=progress_callback, timeout=60, persistent=persistent)
         print("Local document loaded successfully.")
         assert groq.rag_manager.vector_store is not None
 
-        # Test loading from a URL with a shorter timeout
         try:
             groq.load_documents("https://en.wikipedia.org/wiki/Artificial_intelligence", 
-                                progress_callback=progress_callback, timeout=120, persistent=persistent)  # 2-minute timeout
+                                progress_callback=progress_callback, timeout=120, persistent=persistent)
             print("Web document loaded successfully.")
         except TimeoutError:
             print("Web document loading timed out, but local document was processed successfully.")
@@ -372,7 +358,6 @@ def test_document_loading(persistent: bool = True):
         print(f"Failed to load document: {e}")
         raise
     finally:
-        # Clean up the temporary file
         os.unlink(temp_file_path)
 
 def test_document_querying():
@@ -389,9 +374,8 @@ def test_document_querying():
 
 def test_rag_error_handling():
     print("\nTesting RAG Error Handling...")
-    # Reset GroqProvider to ensure RAG is not initialized
     global groq
-    groq = GroqProvider(rag_persistent=False)  # Initialize without RAG persistence
+    groq = GroqProvider(rag_persistent=False)
     
     try:
         groq.query_documents("This should fail")
@@ -412,17 +396,14 @@ def test_rag_error_handling():
 def test_persistent_conversation():
     print("\nTesting Persistent Conversation...")
     session_id = PERSISTENT_SESSION_ID
-    # Ensure the session is started
     groq.start_conversation(session_id)
     
-    # First user message
     user_message1 = "What is the capital of Ohio?"
     response1 = groq.generate(prompt=user_message1, session_id=session_id)
     print(f"User: {user_message1}")
     print(f"PG: {response1}")
     assert isinstance(response1, str) and len(response1) > 0
 
-    # Second user message, expecting context-aware response
     user_message2 = "What is its population?"
     response2 = groq.generate(prompt=user_message2, session_id=session_id)
     print(f"\nUser: {user_message2}")
@@ -432,33 +413,198 @@ def test_persistent_conversation():
 def test_disposable_conversation():
     print("\nTesting Disposable Conversation...")
     session_id = DISPOSABLE_SESSION_ID
-    # Ensure the session is started
     groq.start_conversation(session_id)
     
-    # First user message
     user_message1 = "What is the capital of Ohio?"
     response1 = groq.generate(prompt=user_message1, session_id=session_id)
     print(f"User: {user_message1}")
     print(f"PG: {response1}")
     assert isinstance(response1, str) and len(response1) > 0
 
-    # Second user message, expecting non-context-aware response
     user_message2 = "What is its population?"
-    # Reset the conversation to make it disposable
     groq.reset_conversation(session_id)
     response2 = groq.generate(prompt=user_message2, session_id=session_id)
     print(f"\nUser: {user_message2}")
     print(f"PG: {response2}")
     assert isinstance(response2, str) and len(response2) > 0
 
+def test_web_search():
+    print("\nTesting Web Search...")
+    query = "What is PocketGroq?"
+    results = groq.web_search(query)
+    print(f"Search query: {query}")
+    print(f"Number of results: {len(results)}")
+    assert isinstance(results, list) and len(results) > 0
+    print("First result:", results[0])
+
+def test_get_web_content():
+    print("\nTesting Get Web Content...")
+    url = "https://yahoo.com"
+    content = groq.get_web_content(url)
+    print(f"Content length for {url}: {len(content)} characters")
+    assert isinstance(content, str) and len(content) > 0
+    print("First 100 characters:", content[:100])
+
+def test_crawl_website():
+    print("\nTesting Website Crawling...")
+    url = "https://yahoo.com"
+    results = groq.crawl_website(url, formats=["markdown", "html"], max_depth=2, max_pages=5)
+    print(f"Crawl results for {url}:")
+    print(f"Number of pages crawled: {len(results)}")
+    assert isinstance(results, list) and len(results) > 0
+    print("First page title:", results[0]['metadata']['title'])
+
+def test_scrape_url():
+    print("\nTesting URL Scraping...")
+    url = "https://yahoo.com"
+    result = groq.scrape_url(url, formats=["markdown", "html", "structured_data"])
+    print(f"Scrape result for {url}:")
+    assert isinstance(result, dict) and 'markdown' in result and 'html' in result
+    print("Markdown content length:", len(result['markdown']))
+    print("HTML content length:", len(result['html']))
+    if 'structured_data' in result:
+        print("Structured data:", json.dumps(result['structured_data'], indent=2))
+
+def display_menu():
+    print("\nPocketGroq Test Menu:")
+    print("1. Basic Chat Completion")
+    print("2. Streaming Chat Completion")
+    print("3. Override Default Model")
+    print("4. Chat Completion with Stop Sequence")
+    print("5. Asynchronous Generation")
+    print("6. Streaming Async Chat Completion")
+    print("7. JSON Mode")
+    print("8. Tool Usage")
+    print("9. Vision")
+    print("10. Chain of Thought Problem Solving")
+    print("11. Chain of Thought Step Generation")
+    print("12. Chain of Thought Synthesis")
+    print("13. Test RAG Initialization")
+    print("14. Test Document Loading")
+    print("15. Test Document Querying")
+    print("16. Test RAG Error Handling")
+    print("17. Test Persistent Conversation")
+    print("18. Test Disposable Conversation")
+    print("19. Web Search")
+    print("20. Get Web Content")
+    print("21. Crawl Website")
+    print("22. Scrape URL")
+
+    print("23. Run All Web Tests")
+    print("24. Run All RAG Tests")
+    print("25. Run All Conversation Tests")
+    print("26. Run All Tests")
+    print("0. Exit")
 
 async def main():
-    # Start conversation sessions
     start_conversations()
+    
+    while True:
+        display_menu()
+        choice = input("Enter your choice (0-27): ")
+        
+        try:
+            if choice == '0':
+                break
+            elif choice == '1':
+                test_basic_chat_completion()
+            elif choice == '2':
+                test_streaming_chat_completion()
+            elif choice == '3':
+                test_override_default_model()
+            elif choice == '4':
+                test_chat_completion_with_stop_sequence()
+            elif choice == '5':
+                await test_async_generation()
+            elif choice == '6':
+                await test_streaming_async_chat_completion()
+            elif choice == '7':
+                test_json_mode()
+            elif choice == '8':
+                test_tool_usage()
+            elif choice == '9':
+                test_vision()
+            elif choice == '10':
+                test_cot_problem_solving()
+            elif choice == '11':
+                test_cot_step_generation()
+            elif choice == '12':
+                test_cot_synthesis()
+            elif choice == '13':
+                test_rag_initialization()
+            elif choice == '14':
+                test_document_loading(persistent=True)
+            elif choice == '15':
+                test_document_querying()
+            elif choice == '16':
+                test_rag_error_handling()
+            elif choice == '17':
+                test_persistent_conversation()
+            elif choice == '18':
+                test_disposable_conversation()
+            elif choice == '19':
+                test_web_search()
+            elif choice == '20':
+                test_get_web_content()
+            elif choice == '21':
+                test_crawl_website()
+            elif choice == '22':
+                test_scrape_url()
+            elif choice == '23':
+                test_web_search()
+                test_get_web_content()
+                test_crawl_website()
+                test_scrape_url()
+                print("\nAll Web tests completed successfully!")
+            elif choice == '24':
+                test_rag_initialization()
+                test_document_loading(persistent=True)
+                test_document_querying()
+                test_rag_error_handling()
+                print("\nAll RAG tests completed successfully!")
+            elif choice == '25':
+                test_persistent_conversation()
+                test_disposable_conversation()
+                print("\nAll Conversation tests completed successfully!")
+            elif choice == '26':
+                test_basic_chat_completion()
+                test_streaming_chat_completion()
+                test_override_default_model()
+                test_chat_completion_with_stop_sequence()
+                await test_async_generation()
+                await test_streaming_async_chat_completion()
+                test_json_mode()
+                test_tool_usage()
+                test_vision()
+                test_cot_problem_solving()
+                test_cot_step_generation()
+                test_cot_synthesis()
+                test_rag_initialization()
+                test_document_loading(persistent=True)
+                test_document_querying()
+                test_rag_error_handling()
+                test_persistent_conversation()
+                test_disposable_conversation()
+                test_web_search()
+                test_get_web_content()
+                test_crawl_website()
+                test_scrape_url()
+                print("\nAll tests completed successfully!")
+            else:
+                print("Invalid choice. Please try again.")
+        except GroqAPIKeyMissingError as e:
+            print(f"Error: {e}")
+        except GroqAPIError as e:
+            print(f"API Error: {e}")
+        except AssertionError as e:
+            print(f"Assertion Error: {e}")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+        
+        input("\nPress Enter to continue...")
 
 if __name__ == "__main__":
     asyncio.run(main())
-
 ```
 
 # pocketgroq\config.py
@@ -482,6 +628,112 @@ def get_api_key() -> str:
     if not api_key:
         raise GroqAPIKeyMissingError("GROQ_API_KEY not found in environment variables or .env file")
     return api_key
+```
+
+# pocketgroq\enhanced_web_tool.py
+
+```python
+import requests
+from bs4 import BeautifulSoup
+from typing import Dict, Any, List, Optional
+from urllib.parse import urlparse, urljoin
+import markdown2
+import json
+
+class EnhancedWebTool:
+    def __init__(self, max_depth: int = 3, max_pages: int = 100):
+        self.max_depth = max_depth
+        self.max_pages = max_pages
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        }
+
+    def crawl(self, start_url: str, formats: List[str] = ["markdown"]) -> List[Dict[str, Any]]:
+        visited = set()
+        to_visit = [(start_url, 0)]
+        results = []
+
+        while to_visit and len(results) < self.max_pages:
+            url, depth = to_visit.pop(0)
+            if url in visited or depth > self.max_depth:
+                continue
+
+            visited.add(url)
+            page_content = self.scrape_page(url, formats)
+            if page_content:
+                results.append(page_content)
+
+            if depth < self.max_depth:
+                links = self.extract_links(url, page_content.get('html', ''))
+                to_visit.extend((link, depth + 1) for link in links if link not in visited)
+
+        return results
+
+    def scrape_page(self, url: str, formats: List[str]) -> Optional[Dict[str, Any]]:
+        try:
+            response = requests.get(url, headers=self.headers, timeout=10)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+
+            result = {
+                'url': url,
+                'metadata': self.extract_metadata(soup, url),
+            }
+
+            if 'markdown' in formats:
+                result['markdown'] = self.html_to_markdown(str(soup))
+            if 'html' in formats:
+                result['html'] = str(soup)
+            if 'structured_data' in formats:
+                result['structured_data'] = self.extract_structured_data(soup)
+
+            return result
+        except requests.RequestException as e:
+            print(f"Error scraping {url}: {str(e)}")
+            return None
+
+    def extract_links(self, base_url: str, html_content: str) -> List[str]:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        base_domain = urlparse(base_url).netloc
+        links = []
+
+        for a_tag in soup.find_all('a', href=True):
+            href = a_tag['href']
+            full_url = urljoin(base_url, href)
+            if urlparse(full_url).netloc == base_domain:
+                links.append(full_url)
+
+        return links
+
+    def extract_metadata(self, soup: BeautifulSoup, url: str) -> Dict[str, Any]:
+        metadata = {
+            'title': soup.title.string if soup.title else '',
+            'description': '',
+            'language': soup.html.get('lang', ''),
+            'sourceURL': url,
+        }
+
+        meta_tags = soup.find_all('meta')
+        for tag in meta_tags:
+            if tag.get('name') == 'description':
+                metadata['description'] = tag.get('content', '')
+            elif tag.get('property') == 'og:description':
+                metadata['og_description'] = tag.get('content', '')
+
+        return metadata
+
+    def html_to_markdown(self, html_content: str) -> str:
+        return markdown2.markdown(html_content)
+
+    def extract_structured_data(self, soup: BeautifulSoup) -> Dict[str, Any]:
+        structured_data = {}
+        for script in soup.find_all('script', type='application/ld+json'):
+            try:
+                data = json.loads(script.string)
+                structured_data.update(data)
+            except json.JSONDecodeError:
+                pass
+        return structured_data
 ```
 
 # pocketgroq\exceptions.py
@@ -520,6 +772,7 @@ from langchain_groq import ChatGroq
 from langchain_community.embeddings import OllamaEmbeddings
 from typing import Callable, Dict, Any, List, Union, AsyncIterator, Optional
 
+from .enhanced_web_tool import EnhancedWebTool
 from .exceptions import GroqAPIKeyMissingError, GroqAPIError, OllamaServerNotRunningError
 from .web_tool import WebTool
 from .chain_of_thought.cot_manager import ChainOfThoughtManager
@@ -545,6 +798,7 @@ class GroqProvider(LLMInterface):
         self.tools = {}
         self.rag_persistent = rag_persistent
         self.rag_index_path = rag_index_path
+        self.enhanced_web_tool = EnhancedWebTool()
 
         # Initialize conversation sessions
         self.conversation_sessions = defaultdict(list)  # session_id -> list of messages
@@ -556,6 +810,23 @@ class GroqProvider(LLMInterface):
                 self.initialize_rag(index_path=self.rag_index_path)
         else:
             logger.warning("Ollama server is not running. RAG functionality will be limited.")
+
+    def crawl_website(self, url: str, formats: List[str] = ["markdown"], max_depth: int = 3, max_pages: int = 100) -> List[Dict[str, Any]]:
+        """
+        Crawl a website and return its content in specified formats.
+        
+        Args:
+            url (str): The starting URL to crawl.
+            formats (List[str]): List of desired output formats (e.g., ["markdown", "html", "structured_data"]).
+            max_depth (int): Maximum depth to crawl.
+            max_pages (int): Maximum number of pages to crawl.
+        
+        Returns:
+            List[Dict[str, Any]]: List of crawled pages with their content in specified formats.
+        """
+        self.enhanced_web_tool.max_depth = max_depth
+        self.enhanced_web_tool.max_pages = max_pages
+        return self.enhanced_web_tool.crawl(url, formats)
 
     def is_ollama_server_running(self) -> bool:
         """Check if the Ollama server is running."""
@@ -575,6 +846,19 @@ class GroqProvider(LLMInterface):
 
     def register_tool(self, name: str, func: callable):
         self.tools[name] = func
+
+    def scrape_url(self, url: str, formats: List[str] = ["markdown"]) -> Dict[str, Any]:
+        """
+        Scrape a single URL and return its content in specified formats.
+        
+        Args:
+            url (str): The URL to scrape.
+            formats (List[str]): List of desired output formats (e.g., ["markdown", "html", "structured_data"]).
+        
+        Returns:
+            Dict[str, Any]: The scraped content in specified formats.
+        """
+        return self.enhanced_web_tool.scrape_page(url, formats)
 
     def end_conversation(self, conversation_id: str):
         """
@@ -1083,13 +1367,26 @@ class WebTool:
 # pocketgroq/__init__.py
 
 from .groq_provider import GroqProvider
-from .exceptions import GroqAPIKeyMissingError, GroqAPIError
+from .exceptions import GroqAPIKeyMissingError, GroqAPIError, OllamaServerNotRunningError
 from .config import get_api_key
-from .chain_of_thought.cot_manager import ChainOfThoughtManager
-from .chain_of_thought.llm_interface import LLMInterface
+from .chain_of_thought import ChainOfThoughtManager, LLMInterface
 from .rag_manager import RAGManager
+from .web_tool import WebTool
+from .enhanced_web_tool import EnhancedWebTool
 
-__all__ = ['GroqProvider', 'GroqAPIKeyMissingError', 'GroqAPIError', 'get_api_key', 'ChainOfThoughtManager', 'LLMInterface', 'RAGManager']
+
+__all__ = [
+    'GroqProvider',
+    'GroqAPIKeyMissingError',
+    'GroqAPIError',
+    'OllamaServerNotRunningError',
+    'get_api_key',
+    'ChainOfThoughtManager',
+    'LLMInterface',
+    'RAGManager',
+    'WebTool',
+    'EnhancedWebTool'
+]
 ```
 
 # tests\test_groq_provider.py
@@ -1304,6 +1601,18 @@ def sanitize_input(text: str) -> str:
     return sanitized.strip()
 ```
 
+# pocketgroq\chain_of_thought\__init__.py
+
+```python
+# pocketgroq/chain_of_thought/__init__.py
+
+from .cot_manager import ChainOfThoughtManager
+from .llm_interface import LLMInterface
+from .utils import sanitize_input, validate_cot_steps
+
+__all__ = ['ChainOfThoughtManager', 'LLMInterface', 'sanitize_input', 'validate_cot_steps']
+```
+
 # build\lib\chain_of_thought\cot_manager.py
 
 ```python
@@ -1441,6 +1750,112 @@ def get_api_key() -> str:
     return api_key
 ```
 
+# build\lib\pocketgroq\enhanced_web_tool.py
+
+```python
+import requests
+from bs4 import BeautifulSoup
+from typing import Dict, Any, List, Optional
+from urllib.parse import urlparse, urljoin
+import markdown2
+import json
+
+class EnhancedWebTool:
+    def __init__(self, max_depth: int = 3, max_pages: int = 100):
+        self.max_depth = max_depth
+        self.max_pages = max_pages
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        }
+
+    def crawl(self, start_url: str, formats: List[str] = ["markdown"]) -> List[Dict[str, Any]]:
+        visited = set()
+        to_visit = [(start_url, 0)]
+        results = []
+
+        while to_visit and len(results) < self.max_pages:
+            url, depth = to_visit.pop(0)
+            if url in visited or depth > self.max_depth:
+                continue
+
+            visited.add(url)
+            page_content = self.scrape_page(url, formats)
+            if page_content:
+                results.append(page_content)
+
+            if depth < self.max_depth:
+                links = self.extract_links(url, page_content.get('html', ''))
+                to_visit.extend((link, depth + 1) for link in links if link not in visited)
+
+        return results
+
+    def scrape_page(self, url: str, formats: List[str]) -> Optional[Dict[str, Any]]:
+        try:
+            response = requests.get(url, headers=self.headers, timeout=10)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+
+            result = {
+                'url': url,
+                'metadata': self.extract_metadata(soup, url),
+            }
+
+            if 'markdown' in formats:
+                result['markdown'] = self.html_to_markdown(str(soup))
+            if 'html' in formats:
+                result['html'] = str(soup)
+            if 'structured_data' in formats:
+                result['structured_data'] = self.extract_structured_data(soup)
+
+            return result
+        except requests.RequestException as e:
+            print(f"Error scraping {url}: {str(e)}")
+            return None
+
+    def extract_links(self, base_url: str, html_content: str) -> List[str]:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        base_domain = urlparse(base_url).netloc
+        links = []
+
+        for a_tag in soup.find_all('a', href=True):
+            href = a_tag['href']
+            full_url = urljoin(base_url, href)
+            if urlparse(full_url).netloc == base_domain:
+                links.append(full_url)
+
+        return links
+
+    def extract_metadata(self, soup: BeautifulSoup, url: str) -> Dict[str, Any]:
+        metadata = {
+            'title': soup.title.string if soup.title else '',
+            'description': '',
+            'language': soup.html.get('lang', ''),
+            'sourceURL': url,
+        }
+
+        meta_tags = soup.find_all('meta')
+        for tag in meta_tags:
+            if tag.get('name') == 'description':
+                metadata['description'] = tag.get('content', '')
+            elif tag.get('property') == 'og:description':
+                metadata['og_description'] = tag.get('content', '')
+
+        return metadata
+
+    def html_to_markdown(self, html_content: str) -> str:
+        return markdown2.markdown(html_content)
+
+    def extract_structured_data(self, soup: BeautifulSoup) -> Dict[str, Any]:
+        structured_data = {}
+        for script in soup.find_all('script', type='application/ld+json'):
+            try:
+                data = json.loads(script.string)
+                structured_data.update(data)
+            except json.JSONDecodeError:
+                pass
+        return structured_data
+```
+
 # build\lib\pocketgroq\exceptions.py
 
 ```python
@@ -1477,6 +1892,7 @@ from langchain_groq import ChatGroq
 from langchain_community.embeddings import OllamaEmbeddings
 from typing import Callable, Dict, Any, List, Union, AsyncIterator, Optional
 
+from .enhanced_web_tool import EnhancedWebTool
 from .exceptions import GroqAPIKeyMissingError, GroqAPIError, OllamaServerNotRunningError
 from .web_tool import WebTool
 from .chain_of_thought.cot_manager import ChainOfThoughtManager
@@ -1502,6 +1918,7 @@ class GroqProvider(LLMInterface):
         self.tools = {}
         self.rag_persistent = rag_persistent
         self.rag_index_path = rag_index_path
+        self.enhanced_web_tool = EnhancedWebTool()
 
         # Initialize conversation sessions
         self.conversation_sessions = defaultdict(list)  # session_id -> list of messages
@@ -1513,6 +1930,23 @@ class GroqProvider(LLMInterface):
                 self.initialize_rag(index_path=self.rag_index_path)
         else:
             logger.warning("Ollama server is not running. RAG functionality will be limited.")
+
+    def crawl_website(self, url: str, formats: List[str] = ["markdown"], max_depth: int = 3, max_pages: int = 100) -> List[Dict[str, Any]]:
+        """
+        Crawl a website and return its content in specified formats.
+        
+        Args:
+            url (str): The starting URL to crawl.
+            formats (List[str]): List of desired output formats (e.g., ["markdown", "html", "structured_data"]).
+            max_depth (int): Maximum depth to crawl.
+            max_pages (int): Maximum number of pages to crawl.
+        
+        Returns:
+            List[Dict[str, Any]]: List of crawled pages with their content in specified formats.
+        """
+        self.enhanced_web_tool.max_depth = max_depth
+        self.enhanced_web_tool.max_pages = max_pages
+        return self.enhanced_web_tool.crawl(url, formats)
 
     def is_ollama_server_running(self) -> bool:
         """Check if the Ollama server is running."""
@@ -1532,6 +1966,19 @@ class GroqProvider(LLMInterface):
 
     def register_tool(self, name: str, func: callable):
         self.tools[name] = func
+
+    def scrape_url(self, url: str, formats: List[str] = ["markdown"]) -> Dict[str, Any]:
+        """
+        Scrape a single URL and return its content in specified formats.
+        
+        Args:
+            url (str): The URL to scrape.
+            formats (List[str]): List of desired output formats (e.g., ["markdown", "html", "structured_data"]).
+        
+        Returns:
+            Dict[str, Any]: The scraped content in specified formats.
+        """
+        return self.enhanced_web_tool.scrape_page(url, formats)
 
     def end_conversation(self, conversation_id: str):
         """
