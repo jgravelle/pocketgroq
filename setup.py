@@ -6,10 +6,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pocketgroq",
-    version="0.4.5",  # Incremented the version number
+    version="0.4.6",  # Incremented the version number to 0.4.6
     author="PocketGroq Team",
     author_email="pocketgroq@example.com",
-    description="A library for easy integration with Groq API, including image handling and Chain of Thought reasoning",
+    description="A library for easy integration with Groq API, including web scraping, image handling, and Chain of Thought reasoning",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/jgravelle/pocketgroq",
@@ -28,7 +28,7 @@ setup(
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
     ],
-    packages=find_packages(exclude=["tests", "tests.*"]),
+    packages=find_packages(include=['pocketgroq', 'pocketgroq.*']),
     python_requires=">=3.7",
     install_requires=[
         "bs4>=0.0.2",
