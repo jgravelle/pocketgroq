@@ -213,13 +213,32 @@ def test_tool_usage():
 def test_vision():
     print("\nTesting Vision...")
     image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/320px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
-    response_url = groq.generate(
-        prompt="Describe this image in one sentence.",
-        model="llava-v1.5-7b-4096-preview",
-        image_url=image_url
+    response = groq._create_completion(
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Describe this image in one sentence."
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": image_url
+                        }
+                    }
+                ]
+            }
+        ],
+        model="llama-3.2-11b-vision-preview",
+        temperature=1,
+        max_tokens=1024,
+        top_p=1,
+        stream=False
     )
-    print("Response:", response_url)
-    assert isinstance(response_url, str) and len(response_url) > 0
+    print("Response:", response)
+    assert isinstance(response, str) and len(response) > 0
 
 def test_cot_problem_solving():
     print("\nTesting Chain of Thought Problem Solving...")
