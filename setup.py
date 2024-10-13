@@ -6,9 +6,9 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pocketgroq",
-    version="0.4.9",  # Incremented the version number to 0.4.6
+    version="0.5.0",
     author="PocketGroq Team",
-    author_email="pocketgroq@example.com",
+    author_email="j@gravelle.us",
     description="A library for easy integration with Groq API, including web scraping, image handling, and Chain of Thought reasoning",
     long_description=long_description,
     long_description_content_type="text/markdown",

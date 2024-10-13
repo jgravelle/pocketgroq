@@ -9,6 +9,7 @@ import uuid
 from typing import List, Optional, Union
 from pydantic import BaseModel, Field, field_validator
 from pocketgroq import GroqProvider, GroqAPIKeyMissingError, GroqAPIError
+from pocketgroq.autonomous_agent import AutonomousAgent
 
 DEBUG = False
 logging.basicConfig(level=logging.FATAL)
@@ -440,6 +441,22 @@ def test_scrape_url():
     if 'structured_data' in result:
         print("Structured data:", json.dumps(result['structured_data'], indent=2))
 
+def test_autonomous_agent():
+    print("\nTesting Autonomous Agent...")
+    agent = AutonomousAgent(groq, max_sources=3)  # Limit to 3 sources for faster testing
+    
+    request = "What is the current temperature in Sheboygan, Wisconsin?"
+    response = agent.process_request(request)
+    
+    print(f"\nRequest: {request}")
+    print(f"Final response: {response}")
+    
+    is_satisfactory = groq.evaluate_response(request, response)
+    print(f"Response is satisfactory: {is_satisfactory}")
+    
+    assert is_satisfactory, "The autonomous agent should provide a satisfactory response"
+
+
 def display_menu():
     print("\nPocketGroq Test Menu:")
     print("1. Basic Chat Completion")
@@ -465,10 +482,11 @@ def display_menu():
     print("21. Get Web Content")
     print("22. Crawl Website")
     print("23. Scrape URL")
-    print("24. Run All Web Tests")
-    print("25. Run All RAG Tests")
-    print("26. Run All Conversation Tests")
-    print("27. Run All Tests")
+    print("24. Test Autonomous Agent")
+    print("25. Run All Web Tests")
+    print("26. Run All RAG Tests")
+    print("27. Run All Conversation Tests")
+    print("28. Run All Tests")
     print("0. Exit")
 
 async def main():
@@ -528,22 +546,24 @@ async def main():
             elif choice == '23':
                 test_scrape_url()
             elif choice == '24':
+                test_autonomous_agent()
+            elif choice == '25':
                 test_web_search()
                 test_get_web_content()
                 test_crawl_website()
                 test_scrape_url()
                 print("\nAll Web tests completed successfully!")
-            elif choice == '25':
+            elif choice == '26':
                 test_rag_initialization()
                 test_document_loading(persistent=True)
                 test_document_querying()
                 test_rag_error_handling()
                 print("\nAll RAG tests completed successfully!")
-            elif choice == '26':
+            elif choice == '27':
                 test_persistent_conversation()
                 test_disposable_conversation()
                 print("\nAll Conversation tests completed successfully!")
-            elif choice == '27':
+            elif choice == '28':
                 test_basic_chat_completion()
                 test_streaming_chat_completion()
                 test_override_default_model()
@@ -567,6 +587,7 @@ async def main():
                 test_get_web_content()
                 test_crawl_website()
                 test_scrape_url()
+                test_autonomous_agent()
                 print("\nAll tests completed successfully!")
             else:
                 print("Invalid choice. Please try again.")

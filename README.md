@@ -1,5 +1,43 @@
-# PocketGroq v0.4.8: Enhanced Web Capabilities and Flexible Ollama Integration
+# PocketGroq v0.5.0: Introducing AUTONOMOUS AGENTS!!!
 ![PocketGroq Logo](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
+
+## What's NEW in v0.5.0!
+
+## Autonomous Agent
+
+PocketGroq now includes an AutonomousAgent class that can autonomously research and answer questions:
+
+```python
+from pocketgroq import GroqProvider
+from pocketgroq.autonomous_agent import AutonomousAgent
+
+groq = GroqProvider()
+agent = AutonomousAgent(groq)
+
+request = "What is the current temperature in Sheboygan, Wisconsin?"
+response = agent.process_request(request)
+
+print(f"Final response: {response}")
+```
+
+The AutonomousAgent:
+- Attempts to answer the question using its initial knowledge.
+- If unsuccessful, it uses web search tools to find relevant information.
+- Evaluates each potential response for accuracy and completeness.
+- Keeps the user informed of its progress throughout the process.
+- Handles rate limiting and errors gracefully.
+
+You can customize the agent's behavior:
+
+```python
+# Set a custom maximum number of sources to check
+agent = AutonomousAgent(groq, max_sources=10)
+
+# Or specify it for a single request
+response = agent.process_request(request, max_sources=8)
+```
+
+The agent will search up to the specified number of sources, waiting at least 2 seconds between requests to avoid overwhelming the search services.
 
 ## What's New in v0.4.9
 
