@@ -1,5 +1,6 @@
 import time
 import logging
+import re
 from typing import List, Dict, Any, Generator
 from pocketgroq import GroqProvider
 from pocketgroq.exceptions import GroqAPIError
@@ -8,10 +9,12 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 class AutonomousAgent:
-    def __init__(self, groq_provider: GroqProvider, max_sources: int = 5, search_delay: float = 2.0):
+    def __init__(self, groq_provider: GroqProvider, max_sources: int = 5, search_delay: float = 2.0, model: str = "llama3-8b-8192", temperature: float = 0.0):
         self.groq = groq_provider
         self.max_sources = max_sources
         self.search_delay = search_delay
+        self.model = model
+        self.temperature = temperature
 
     def process_request(self, request: str, max_sources: int = None) -> Generator[Dict[str, str], None, None]:
         if max_sources is not None:
@@ -20,11 +23,11 @@ class AutonomousAgent:
         self._inform_user(f"Processing request: '{request}'")
         yield {"type": "research", "content": f"Processing request: '{request}'"}
 
-        initial_response = self.groq.generate(request)
+        initial_response = self.groq.generate(prompt=request, model=self.model, temperature=self.temperature)
         self._inform_user(f"Initial response: {initial_response}")
         yield {"type": "research", "content": f"Initial response: {initial_response}"}
 
-        if self.groq.evaluate_response(request, initial_response):
+        if self._evaluate_response(request, initial_response):
             self._inform_user("Initial response was satisfactory.")
             yield {"type": "research", "content": "Initial response was satisfactory."}
             yield {"type": "response", "content": initial_response}
@@ -57,7 +60,7 @@ class AutonomousAgent:
                 self._inform_user(f"Generated response from content: {response}")
                 yield {"type": "research", "content": f"Generated response from content: {response}"}
 
-                if self.groq.evaluate_response(request, response):
+                if self._evaluate_response(request, response):
                     self._inform_user("This response is satisfactory.")
                     yield {"type": "research", "content": "This response is satisfactory."}
                     yield {"type": "response", "content": response}
@@ -82,20 +85,30 @@ class AutonomousAgent:
         yield {"type": "response", "content": final_message}
 
     def _generate_search_query(self, request: str) -> str:
-        prompt = f"Generate a single, concise search query (no more than 6 words) to find information for: '{request}'. Respond with only the search query, no other text."
-        query = self.groq.generate(prompt).strip()
-        
-        # Remove any quotes or backticks that might have been added
+        prompt = f"Generate a single, concise search query (no more than 8 words) to find current, specific information for: '{request}'. Include words like 'current' or 'today' to emphasize recency. Respond with only the search query, no other text."
+        query = self.groq.generate(prompt=prompt, model=self.model, temperature=self.temperature).strip()
         query = query.replace('"', '').replace('`', '').strip()
-        
         logger.debug(f"Generated search query: {query}")
         return query
 
     def _generate_response_from_content(self, request: str, content: str) -> str:
-        prompt = f"Based on the following content, provide a concise and accurate answer to this request: '{request}'\n\nContent: {content[:4000]}"
-        response = self.groq.generate(prompt)
+        prompt = f"Based on the following content, provide a concise and accurate answer to this request: '{request}'. Include only current, specific information. Do not use placeholders or generic responses. If the information is not available or current, state that clearly.\n\nContent: {content[:4000]}"
+        response = self.groq.generate(prompt=prompt, model=self.model, temperature=self.temperature)
         logger.debug(f"Generated response from content: {response}")
         return response
+
+    def _evaluate_response(self, request: str, response: str) -> bool:
+        # Check for placeholder text
+        if re.search(r'\[.*?\]', response):
+            return False
+
+        # Check for generic or non-specific responses
+        generic_phrases = ["I'm sorry", "I don't have access to real-time data", "I cannot provide current information"]
+        if any(phrase in response for phrase in generic_phrases):
+            return False
+
+        # Use the existing evaluate_response method as an additional check
+        return self.groq.evaluate_response(request, response)
 
     def _inform_user(self, message: str):
         print(f"Agent: {message}")

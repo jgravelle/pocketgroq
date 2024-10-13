@@ -1,7 +1,7 @@
-# PocketGroq v0.5.0: Introducing AUTONOMOUS AGENTS!!!
+# PocketGroq v0.5.3: Introducing AUTONOMOUS AGENTS!!!
 ![PocketGroq Logo](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
 
-## What's NEW in v0.5.0!
+## What's NEW in v0.5.3!
 
 ## Autonomous Agent
 
