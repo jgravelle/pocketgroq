@@ -84,6 +84,34 @@ class GroqProvider(LLMInterface):
                 raise OllamaServerNotRunningError("Ollama server is not running. Please start it and try again.")
             return func(self, *args, **kwargs)
         return wrapper
+    
+    def evaluate_response(self, request: str, response: str) -> bool:
+        """
+        Evaluate if a response satisfies a given request using an AI LLM.
+        
+        Args:
+            request (str): The original request or question.
+            response (str): The response to be evaluated.
+        
+        Returns:
+            bool: True if the response is deemed satisfactory, False otherwise.
+        """
+        evaluation_prompt = f"""
+        You will be given a request and a response. Your task is to evaluate the response based on the following criteria:
+        1. **Informative and Correct**: The response must be accurate and provide clear, useful, and sufficient information to fully answer the request.
+        2. **No Uncertainty**: The response should not express any uncertainty, such as language indicating doubt (e.g., "maybe," "possibly," "it seems") or statements that are inconclusive.
+
+        Request: {request}
+        Response: {response}
+
+        Based on these criteria, is the response satisfactory? Answer with only 'Yes' or 'No'.
+        """
+
+        evaluation = self.generate(evaluation_prompt, temperature=0.0, max_tokens=1)
+        
+        # Clean up the response and convert to boolean
+        evaluation = evaluation.strip().lower()
+        return evaluation == 'yes'
 
     def register_tool(self, name: str, func: callable):
         self.tools[name] = func

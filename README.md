@@ -1,6 +1,30 @@
 # PocketGroq v0.4.8: Enhanced Web Capabilities and Flexible Ollama Integration
 ![PocketGroq Logo](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
 
+## What's New in v0.4.9
+
+## Response Evaluation
+
+PocketGroq now includes a method to evaluate whether a response satisfies a given request using AI:
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+
+request = "What is the current temperature in Sheboygan?"
+response1 = "58 degrees"
+response2 = "As a large language model, I do not have access to current temperature data"
+
+is_satisfactory1 = groq.evaluate_response(request, response1)
+is_satisfactory2 = groq.evaluate_response(request, response2)
+
+print(f"Response 1 is satisfactory: {is_satisfactory1}")  # Expected: True
+print(f"Response 2 is satisfactory: {is_satisfactory2}")  # Expected: False
+```
+
+This method uses an AI LLM to analyze the request-response pair and determine if the response is satisfactory based on informativeness, correctness, and lack of uncertainty.
+
 ## What's New in v0.4.8
 
 PocketGroq v0.4.8 brings significant enhancements to web-related functionalities and improves the flexibility of Ollama integration:

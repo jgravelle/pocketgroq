@@ -83,6 +83,21 @@ def test_chat_completion_with_stop_sequence():
     print("Response:", response)
     assert isinstance(response, str) and "5" in response and "6" not in response
 
+def test_response_evaluation():
+    print("\nTesting Response Evaluation...")
+    request = "What is the capital of France?"
+    good_response = "The capital of France is Paris."
+    bad_response = "I'm not sure, but I think it might be London or Paris."
+
+    is_good = groq.evaluate_response(request, good_response)
+    is_bad = groq.evaluate_response(request, bad_response)
+
+    print(f"Good response evaluation: {is_good}")
+    print(f"Bad response evaluation: {is_bad}")
+
+    assert is_good == True, "Good response should be evaluated as satisfactory"
+    assert is_bad == False, "Bad response should be evaluated as unsatisfactory"
+
 async def test_async_generation():
     print("\nTesting Asynchronous Generation...")
     response = await groq.generate(
@@ -445,15 +460,15 @@ def display_menu():
     print("16. Test RAG Error Handling")
     print("17. Test Persistent Conversation")
     print("18. Test Disposable Conversation")
-    print("19. Web Search")
-    print("20. Get Web Content")
-    print("21. Crawl Website")
-    print("22. Scrape URL")
-
-    print("23. Run All Web Tests")
-    print("24. Run All RAG Tests")
-    print("25. Run All Conversation Tests")
-    print("26. Run All Tests")
+    print("19. Test Response Evaluation")
+    print("20. Web Search")
+    print("21. Get Web Content")
+    print("22. Crawl Website")
+    print("23. Scrape URL")
+    print("24. Run All Web Tests")
+    print("25. Run All RAG Tests")
+    print("26. Run All Conversation Tests")
+    print("27. Run All Tests")
     print("0. Exit")
 
 async def main():
@@ -503,30 +518,32 @@ async def main():
             elif choice == '18':
                 test_disposable_conversation()
             elif choice == '19':
-                test_web_search()
+                test_response_evaluation()
             elif choice == '20':
-                test_get_web_content()
+                test_web_search()
             elif choice == '21':
-                test_crawl_website()
+                test_get_web_content()
             elif choice == '22':
-                test_scrape_url()
+                test_crawl_website()
             elif choice == '23':
+                test_scrape_url()
+            elif choice == '24':
                 test_web_search()
                 test_get_web_content()
                 test_crawl_website()
                 test_scrape_url()
                 print("\nAll Web tests completed successfully!")
-            elif choice == '24':
+            elif choice == '25':
                 test_rag_initialization()
                 test_document_loading(persistent=True)
                 test_document_querying()
                 test_rag_error_handling()
                 print("\nAll RAG tests completed successfully!")
-            elif choice == '25':
+            elif choice == '26':
                 test_persistent_conversation()
                 test_disposable_conversation()
                 print("\nAll Conversation tests completed successfully!")
-            elif choice == '26':
+            elif choice == '27':
                 test_basic_chat_completion()
                 test_streaming_chat_completion()
                 test_override_default_model()
@@ -545,6 +562,7 @@ async def main():
                 test_rag_error_handling()
                 test_persistent_conversation()
                 test_disposable_conversation()
+                test_response_evaluation()
                 test_web_search()
                 test_get_web_content()
                 test_crawl_website()
