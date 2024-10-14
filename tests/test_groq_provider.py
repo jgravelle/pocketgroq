@@ -103,3 +103,38 @@ def test_api_error(mock_groq_client):
     provider = GroqProvider(api_key='test_api_key')
     with pytest.raises(GroqAPIError):
         provider.generate("Test prompt")
+
+def test_get_available_models():
+    mock_response = {
+        "object": "list",
+        "data": [
+            {
+                "id": "gemma-7b-it",
+                "object": "model",
+                "created": 1693721698,
+                "owned_by": "Google",
+                "active": True,
+                "context_window": 8192
+            },
+            {
+                "id": "llama2-70b-4096",
+                "object": "model",
+                "created": 1693721698,
+                "owned_by": "Meta",
+                "active": True,
+                "context_window": 4096
+            }
+        ]
+    }
+
+    with patch('requests.get') as mock_get:
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = mock_response
+
+        provider = GroqProvider(api_key='test_api_key')
+        models = provider.get_available_models()
+
+        assert len(models) == 2
+        assert models[0]['id'] == "gemma-7b-it"
+        assert models[1]['id'] == "llama2-70b-4096"
+        mock_get.assert_called_once_with("https://api.groq.com/openai/v1/models")

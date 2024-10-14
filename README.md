@@ -1,7 +1,7 @@
-# PocketGroq v0.5.3: Introducing AUTONOMOUS AGENTS!!!
+# PocketGroq v0.5.4: Introducing AUTONOMOUS AGENTS!!!
 ![PocketGroq Logo](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
 
-## What's NEW in v0.5.3!
+## What's NEW in v0.5.4!
 
 ## Autonomous Agent
 
@@ -38,6 +38,10 @@ response = agent.process_request(request, max_sources=8)
 ```
 
 The agent will search up to the specified number of sources, waiting at least 2 seconds between requests to avoid overwhelming the search services.
+
+### ALSO: get_available_models()
+
+(It does what you think it does.)
 
 ## What's New in v0.4.9
 

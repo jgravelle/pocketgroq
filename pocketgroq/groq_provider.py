@@ -1,5 +1,3 @@
-# pocketgroq/groq_provider.py
-
 import asyncio
 import json
 import logging
@@ -51,6 +49,24 @@ class GroqProvider(LLMInterface):
                 self.initialize_rag(index_path=self.rag_index_path)
         else:
             logger.warning("Ollama server is not running. RAG functionality will be limited.")
+
+    def get_available_models(self) -> List[Dict[str, Any]]:
+        """
+        Fetch the list of available models from the Groq provider.
+
+        Returns:
+            List[Dict[str, Any]]: A list of models with their details.
+        """
+        url = "https://api.groq.com/openai/v1/models"
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            models = response.json().get("data", [])
+            return models
+        except requests.RequestException as e:
+            logger.error(f"Failed to fetch models: {e}")
+            raise GroqAPIError(f"Failed to fetch models: {e}")
 
     def crawl_website(self, url: str, formats: List[str] = ["markdown"], max_depth: int = 3, max_pages: int = 100) -> List[Dict[str, Any]]:
         """

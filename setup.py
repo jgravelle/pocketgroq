@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pocketgroq",
-    version="0.5.3",
+    version="0.5.5",
     author="PocketGroq Team",
     author_email="j@gravelle.us",
     description="A library for easy integration with Groq API, including web scraping, image handling, and Chain of Thought reasoning",
@@ -27,6 +27,7 @@ setup(
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
     ],
     packages=find_packages(include=['pocketgroq', 'pocketgroq.*']),
     python_requires=">=3.7",
@@ -34,6 +35,8 @@ setup(
         "bs4>=0.0.2",
         "groq>=0.8.0",
         "python-dotenv>=0.19.1",
+        "pytest>=7.3.1",
+        "pytest-asyncio>=0.21.0",
         "requests>=2.32.3",
         "langchain>=0.3.1",
         "langchain-groq>=0.2.0",
@@ -41,6 +44,7 @@ setup(
         "markdown2>=2.5.0",
         "faiss-cpu>=1.8.0.post1",
         "ollama>=0.3.3",
+        "html2text>=2024.2.26",
     ],
     extras_require={
         "dev": [

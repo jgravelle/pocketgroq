@@ -27,6 +27,12 @@ def start_conversations():
     groq.start_conversation(PERSISTENT_SESSION_ID)
     groq.start_conversation(DISPOSABLE_SESSION_ID)
 
+def test_get_available_models():
+    print("Testing Get Available Models...")
+    models = groq.get_available_models()
+    print("Available Models:", models)
+    assert isinstance(models, list) and len(models) > 0
+
 def test_basic_chat_completion():
     print("Testing Basic Chat Completion...")
     response = groq.generate(
@@ -459,34 +465,35 @@ def test_autonomous_agent():
 
 def display_menu():
     print("\nPocketGroq Test Menu:")
-    print("1. Basic Chat Completion")
-    print("2. Streaming Chat Completion")
-    print("3. Override Default Model")
-    print("4. Chat Completion with Stop Sequence")
-    print("5. Asynchronous Generation")
-    print("6. Streaming Async Chat Completion")
-    print("7. JSON Mode")
-    print("8. Tool Usage")
-    print("9. Vision")
-    print("10. Chain of Thought Problem Solving")
-    print("11. Chain of Thought Step Generation")
-    print("12. Chain of Thought Synthesis")
-    print("13. Test RAG Initialization")
-    print("14. Test Document Loading")
-    print("15. Test Document Querying")
-    print("16. Test RAG Error Handling")
-    print("17. Test Persistent Conversation")
-    print("18. Test Disposable Conversation")
-    print("19. Test Response Evaluation")
-    print("20. Web Search")
-    print("21. Get Web Content")
-    print("22. Crawl Website")
-    print("23. Scrape URL")
-    print("24. Test Autonomous Agent")
-    print("25. Run All Web Tests")
-    print("26. Run All RAG Tests")
-    print("27. Run All Conversation Tests")
-    print("28. Run All Tests")
+    print("1. Get Available Models")
+    print("2. Basic Chat Completion")
+    print("3. Streaming Chat Completion")
+    print("4. Override Default Model")
+    print("5. Chat Completion with Stop Sequence")
+    print("6. Asynchronous Generation")
+    print("7. Streaming Async Chat Completion")
+    print("8. JSON Mode")
+    print("9. Tool Usage")
+    print("10. Vision")
+    print("11. Chain of Thought Problem Solving")
+    print("12. Chain of Thought Step Generation")
+    print("13. Chain of Thought Synthesis")
+    print("14. Test RAG Initialization")
+    print("15. Test Document Loading")
+    print("16. Test Document Querying")
+    print("17. Test RAG Error Handling")
+    print("18. Test Persistent Conversation")
+    print("19. Test Disposable Conversation")
+    print("20. Test Response Evaluation")
+    print("21. Web Search")
+    print("22. Get Web Content")
+    print("23. Crawl Website")
+    print("24. Scrape URL")
+    print("25. Test Autonomous Agent")
+    print("26. Run All Web Tests")
+    print("27. Run All RAG Tests")
+    print("28. Run All Conversation Tests")
+    print("29. Run All Tests")
     print("0. Exit")
 
 async def main():
@@ -494,76 +501,79 @@ async def main():
     
     while True:
         display_menu()
-        choice = input("Enter your choice (0-27): ")
+        choice = input("Enter your choice (0-29): ")
         
         try:
             if choice == '0':
                 break
             elif choice == '1':
-                test_basic_chat_completion()
+                test_get_available_models()
             elif choice == '2':
-                test_streaming_chat_completion()
+                test_basic_chat_completion()
             elif choice == '3':
-                test_override_default_model()
+                test_streaming_chat_completion()
             elif choice == '4':
-                test_chat_completion_with_stop_sequence()
+                test_override_default_model()
             elif choice == '5':
-                await test_async_generation()
+                test_chat_completion_with_stop_sequence()
             elif choice == '6':
-                await test_streaming_async_chat_completion()
+                await test_async_generation()
             elif choice == '7':
-                test_json_mode()
+                await test_streaming_async_chat_completion()
             elif choice == '8':
-                test_tool_usage()
+                test_json_mode()
             elif choice == '9':
-                test_vision()
+                test_tool_usage()
             elif choice == '10':
-                test_cot_problem_solving()
+                test_vision()
             elif choice == '11':
-                test_cot_step_generation()
+                test_cot_problem_solving()
             elif choice == '12':
-                test_cot_synthesis()
+                test_cot_step_generation()
             elif choice == '13':
-                test_rag_initialization()
+                test_cot_synthesis()
             elif choice == '14':
-                test_document_loading(persistent=True)
+                test_rag_initialization()
             elif choice == '15':
-                test_document_querying()
+                test_document_loading(persistent=True)
             elif choice == '16':
-                test_rag_error_handling()
+                test_document_querying()
             elif choice == '17':
-                test_persistent_conversation()
+                test_rag_error_handling()
             elif choice == '18':
-                test_disposable_conversation()
+                test_persistent_conversation()
             elif choice == '19':
-                test_response_evaluation()
+                test_disposable_conversation()
             elif choice == '20':
-                test_web_search()
+                test_response_evaluation()
             elif choice == '21':
-                test_get_web_content()
+                test_web_search()
             elif choice == '22':
-                test_crawl_website()
+                test_get_web_content()
             elif choice == '23':
-                test_scrape_url()
+                test_crawl_website()
             elif choice == '24':
-                test_autonomous_agent()
+                test_scrape_url()
             elif choice == '25':
+                test_autonomous_agent()
+            elif choice == '26':
                 test_web_search()
                 test_get_web_content()
                 test_crawl_website()
                 test_scrape_url()
                 print("\nAll Web tests completed successfully!")
-            elif choice == '26':
+            elif choice == '27':
                 test_rag_initialization()
                 test_document_loading(persistent=True)
                 test_document_querying()
                 test_rag_error_handling()
                 print("\nAll RAG tests completed successfully!")
-            elif choice == '27':
+            elif choice == '28':
                 test_persistent_conversation()
                 test_disposable_conversation()
                 print("\nAll Conversation tests completed successfully!")
-            elif choice == '28':
+            elif choice == '29':
+                test_get_available_models()
                 test_basic_chat_completion()
                 test_streaming_chat_completion()
                 test_override_default_model()

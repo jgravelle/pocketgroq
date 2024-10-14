@@ -1,6 +1,8 @@
 bs4>=0.0.2
 groq>=0.8.0
 python-dotenv>=0.19.1
+pytest>=7.3.1
+pytest-asyncio>=0.21.0
 requests>=2.32.3
 langchain>=0.3.1
 langchain-groq>=0.2.0
@@ -8,6 +10,7 @@ langchain-community>=0.3.1
 markdown2>=2.5.0
 faiss-cpu>=1.8.0.post1
 ollama>=0.3.3
+html2text>=2024.2.26
 
 [dev]
 pytest>=7.3.1
