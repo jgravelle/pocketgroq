@@ -16,7 +16,7 @@ class AutonomousAgent:
         self.model = model
         self.temperature = temperature
 
-    def process_request(self, request: str, max_sources: int = None) -> Generator[Dict[str, str], None, None]:
+    def process_request(self, request: str, max_sources: int = None, verify: bool = False) -> Generator[Dict[str, str], None, None]:
         if max_sources is not None:
             self.max_sources = max_sources
 
@@ -27,14 +27,8 @@ class AutonomousAgent:
         self._inform_user(f"Initial response: {initial_response}")
         yield {"type": "research", "content": f"Initial response: {initial_response}"}
 
-        if self._evaluate_response(request, initial_response):
-            self._inform_user("Initial response was satisfactory.")
-            yield {"type": "research", "content": "Initial response was satisfactory."}
-            yield {"type": "response", "content": initial_response}
-            return
-
-        self._inform_user("Initial response was not satisfactory. I'll search for information online.")
-        yield {"type": "research", "content": "Initial response was not satisfactory. I'll search for information online."}
+        self._inform_user("Searching for information online.")
+        yield {"type": "research", "content": "Searching for information online."}
 
         search_query = self._generate_search_query(request)
         self._inform_user(f"Generated search query: '{search_query}'")
@@ -44,7 +38,11 @@ class AutonomousAgent:
         self._inform_user(f"Found {len(search_results)} search results.")
         yield {"type": "research", "content": f"Found {len(search_results)} search results."}
 
-        for i, result in enumerate(search_results[:self.max_sources]):
+        verified_sources = []
+        for i, result in enumerate(search_results):
+            if i >= self.max_sources:
+                break
+
             if i > 0:
                 time.sleep(self.search_delay)
 
@@ -61,28 +59,56 @@ class AutonomousAgent:
                 yield {"type": "research", "content": f"Generated response from content: {response}"}
 
                 if self._evaluate_response(request, response):
-                    self._inform_user("This response is satisfactory.")
-                    yield {"type": "research", "content": "This response is satisfactory."}
-                    yield {"type": "response", "content": response}
-                    return
+                    verified_sources.append((result['url'], response))
+                    if not verify or len(verified_sources) >= 3:  # Check at least 3 sources
+                        break
                 else:
-                    self._inform_user("This response was not satisfactory. I'll check another source.")
-                    yield {"type": "research", "content": "This response was not satisfactory. I'll check another source."}
+                    self._inform_user("This response was not satisfactory. Checking another source.")
+                    yield {"type": "research", "content": "This response was not satisfactory. Checking another source."}
             except GroqAPIError as e:
                 if e.status_code == 429:
-                    self._inform_user("I've encountered a rate limit. I'll wait for a minute before trying again.")
-                    yield {"type": "research", "content": "I've encountered a rate limit. I'll wait for a minute before trying again."}
+                    self._inform_user("Rate limit encountered. Waiting for a minute before retrying.")
+                    yield {"type": "research", "content": "Rate limit encountered. Waiting for a minute before retrying."}
                     time.sleep(60)
                 else:
-                    self._inform_user(f"I encountered an error while processing {result['url']}: {str(e)}")
-                    yield {"type": "research", "content": f"I encountered an error while processing {result['url']}: {str(e)}"}
+                    self._inform_user(f"Error processing {result['url']}: {str(e)}")
+                    yield {"type": "research", "content": f"Error processing {result['url']}: {str(e)}"}
             except Exception as e:
-                self._inform_user(f"An unexpected error occurred while processing {result['url']}: {str(e)}")
-                yield {"type": "research", "content": f"An unexpected error occurred while processing {result['url']}: {str(e)}"}
+                self._inform_user(f"Unexpected error processing {result['url']}: {str(e)}")
+                yield {"type": "research", "content": f"Unexpected error processing {result['url']}: {str(e)}"}
 
-        final_message = "I'm sorry, but after checking multiple sources, I couldn't find a satisfactory answer to your request."
-        self._inform_user(final_message)
-        yield {"type": "response", "content": final_message}
+        if verified_sources:
+            final_response = self._select_best_response(verified_sources, verify)
+            self._inform_user(final_response)
+            yield {"type": "response", "content": final_response}
+        else:
+            final_message = "After checking multiple sources, I couldn't find a satisfactory answer to your request."
+            self._inform_user(final_message)
+            yield {"type": "response", "content": final_message}
+
+    def _select_best_response(self, verified_sources: List[tuple], verify: bool) -> str:
+        if verify and len(verified_sources) >= 2:
+            # Compare the responses and select the most consistent or recent one
+            consistent_response = self._find_consistent_response(verified_sources)
+            if consistent_response:
+                sources = ", ".join([source[0] for source in verified_sources[:3]])
+                return f"Based on verification from multiple sources ({sources}), here's the answer:\n\n{consistent_response}"
+            else:
+                # If no consistent response, use the most recent one
+                return f"Based on the most recent source {verified_sources[-1][0]}, here's the answer:\n\n{verified_sources[-1][1]}"
+        else:
+            # If verification is not required or we don't have enough sources, use the most recent one
+            return f"Based on the source {verified_sources[-1][0]}, here's the answer:\n\n{verified_sources[-1][1]}"
+
+    def _find_consistent_response(self, verified_sources: List[tuple]) -> str:
+        # Implement logic to find the most consistent response among the verified sources
+        # This could involve comparing key elements of the responses or using a similarity metric
+        # For simplicity, we'll use a basic comparison here
+        responses = [source[1] for source in verified_sources]
+        for response in responses:
+            if responses.count(response) > 1:
+                return response
+        return None
 
     def _generate_search_query(self, request: str) -> str:
         prompt = f"Generate a single, concise search query (no more than 8 words) to find current, specific information for: '{request}'. Include words like 'current' or 'today' to emphasize recency. Respond with only the search query, no other text."
