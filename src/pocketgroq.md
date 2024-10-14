@@ -9,9 +9,9 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pocketgroq",
-    version="0.4.6",  # Incremented the version number to 0.4.6
+    version="0.5.5",
     author="PocketGroq Team",
-    author_email="pocketgroq@example.com",
+    author_email="j@gravelle.us",
     description="A library for easy integration with Groq API, including web scraping, image handling, and Chain of Thought reasoning",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -30,6 +30,7 @@ setup(
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
     ],
     packages=find_packages(include=['pocketgroq', 'pocketgroq.*']),
     python_requires=">=3.7",
@@ -37,6 +38,8 @@ setup(
         "bs4>=0.0.2",
         "groq>=0.8.0",
         "python-dotenv>=0.19.1",
+        "pytest>=7.3.1",
+        "pytest-asyncio>=0.21.0",
         "requests>=2.32.3",
         "langchain>=0.3.1",
         "langchain-groq>=0.2.0",
@@ -44,6 +47,7 @@ setup(
         "markdown2>=2.5.0",
         "faiss-cpu>=1.8.0.post1",
         "ollama>=0.3.3",
+        "html2text>=2024.2.26",
     ],
     extras_require={
         "dev": [
@@ -68,6 +72,7 @@ import uuid
 from typing import List, Optional, Union
 from pydantic import BaseModel, Field, field_validator
 from pocketgroq import GroqProvider, GroqAPIKeyMissingError, GroqAPIError
+from pocketgroq.autonomous_agent import AutonomousAgent
 
 DEBUG = False
 logging.basicConfig(level=logging.FATAL)
@@ -84,6 +89,12 @@ DISPOSABLE_SESSION_ID = str(uuid.uuid4())
 def start_conversations():
     groq.start_conversation(PERSISTENT_SESSION_ID)
     groq.start_conversation(DISPOSABLE_SESSION_ID)
+
+def test_get_available_models():
+    print("Testing Get Available Models...")
+    models = groq.get_available_models()
+    print("Available Models:", models)
+    assert isinstance(models, list) and len(models) > 0
 
 def test_basic_chat_completion():
     print("Testing Basic Chat Completion...")
@@ -141,6 +152,21 @@ def test_chat_completion_with_stop_sequence():
     )
     print("Response:", response)
     assert isinstance(response, str) and "5" in response and "6" not in response
+
+def test_response_evaluation():
+    print("\nTesting Response Evaluation...")
+    request = "What is the capital of France?"
+    good_response = "The capital of France is Paris."
+    bad_response = "I'm not sure, but I think it might be London or Paris."
+
+    is_good = groq.evaluate_response(request, good_response)
+    is_bad = groq.evaluate_response(request, bad_response)
+
+    print(f"Good response evaluation: {is_good}")
+    print(f"Bad response evaluation: {is_bad}")
+
+    assert is_good == True, "Good response should be evaluated as satisfactory"
+    assert is_bad == False, "Bad response should be evaluated as unsatisfactory"
 
 async def test_async_generation():
     print("\nTesting Asynchronous Generation...")
@@ -272,13 +298,32 @@ def test_tool_usage():
 def test_vision():
     print("\nTesting Vision...")
     image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/320px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
-    response_url = groq.generate(
-        prompt="Describe this image in one sentence.",
-        model="llava-v1.5-7b-4096-preview",
-        image_url=image_url
+    response = groq._create_completion(
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Describe this image in one sentence."
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": image_url
+                        }
+                    }
+                ]
+            }
+        ],
+        model="llama-3.2-11b-vision-preview",
+        temperature=1,
+        max_tokens=1024,
+        top_p=1,
+        stream=False
     )
-    print("Response:", response_url)
-    assert isinstance(response_url, str) and len(response_url) > 0
+    print("Response:", response)
+    assert isinstance(response, str) and len(response) > 0
 
 def test_cot_problem_solving():
     print("\nTesting Chain of Thought Problem Solving...")
@@ -465,35 +510,53 @@ def test_scrape_url():
     if 'structured_data' in result:
         print("Structured data:", json.dumps(result['structured_data'], indent=2))
 
+def test_autonomous_agent():
+    print("\nTesting Autonomous Agent...")
+    agent = AutonomousAgent(groq, max_sources=3)  # Limit to 3 sources for faster testing
+    
+    request = "What is the current temperature in Sheboygan, Wisconsin?"
+    response = agent.process_request(request)
+    
+    print(f"\nRequest: {request}")
+    print(f"Final response: {response}")
+    
+    is_satisfactory = groq.evaluate_response(request, response)
+    print(f"Response is satisfactory: {is_satisfactory}")
+    
+    assert is_satisfactory, "The autonomous agent should provide a satisfactory response"
+
+
 def display_menu():
     print("\nPocketGroq Test Menu:")
-    print("1. Basic Chat Completion")
-    print("2. Streaming Chat Completion")
-    print("3. Override Default Model")
-    print("4. Chat Completion with Stop Sequence")
-    print("5. Asynchronous Generation")
-    print("6. Streaming Async Chat Completion")
-    print("7. JSON Mode")
-    print("8. Tool Usage")
-    print("9. Vision")
-    print("10. Chain of Thought Problem Solving")
-    print("11. Chain of Thought Step Generation")
-    print("12. Chain of Thought Synthesis")
-    print("13. Test RAG Initialization")
-    print("14. Test Document Loading")
-    print("15. Test Document Querying")
-    print("16. Test RAG Error Handling")
-    print("17. Test Persistent Conversation")
-    print("18. Test Disposable Conversation")
-    print("19. Web Search")
-    print("20. Get Web Content")
-    print("21. Crawl Website")
-    print("22. Scrape URL")
-
-    print("23. Run All Web Tests")
-    print("24. Run All RAG Tests")
-    print("25. Run All Conversation Tests")
-    print("26. Run All Tests")
+    print("1. Get Available Models")
+    print("2. Basic Chat Completion")
+    print("3. Streaming Chat Completion")
+    print("4. Override Default Model")
+    print("5. Chat Completion with Stop Sequence")
+    print("6. Asynchronous Generation")
+    print("7. Streaming Async Chat Completion")
+    print("8. JSON Mode")
+    print("9. Tool Usage")
+    print("10. Vision")
+    print("11. Chain of Thought Problem Solving")
+    print("12. Chain of Thought Step Generation")
+    print("13. Chain of Thought Synthesis")
+    print("14. Test RAG Initialization")
+    print("15. Test Document Loading")
+    print("16. Test Document Querying")
+    print("17. Test RAG Error Handling")
+    print("18. Test Persistent Conversation")
+    print("19. Test Disposable Conversation")
+    print("20. Test Response Evaluation")
+    print("21. Web Search")
+    print("22. Get Web Content")
+    print("23. Crawl Website")
+    print("24. Scrape URL")
+    print("25. Test Autonomous Agent")
+    print("26. Run All Web Tests")
+    print("27. Run All RAG Tests")
+    print("28. Run All Conversation Tests")
+    print("29. Run All Tests")
     print("0. Exit")
 
 async def main():
@@ -501,72 +564,79 @@ async def main():
     
     while True:
         display_menu()
-        choice = input("Enter your choice (0-27): ")
+        choice = input("Enter your choice (0-29): ")
         
         try:
             if choice == '0':
                 break
             elif choice == '1':
-                test_basic_chat_completion()
+                test_get_available_models()
             elif choice == '2':
-                test_streaming_chat_completion()
+                test_basic_chat_completion()
             elif choice == '3':
-                test_override_default_model()
+                test_streaming_chat_completion()
             elif choice == '4':
-                test_chat_completion_with_stop_sequence()
+                test_override_default_model()
             elif choice == '5':
-                await test_async_generation()
+                test_chat_completion_with_stop_sequence()
             elif choice == '6':
-                await test_streaming_async_chat_completion()
+                await test_async_generation()
             elif choice == '7':
-                test_json_mode()
+                await test_streaming_async_chat_completion()
             elif choice == '8':
-                test_tool_usage()
+                test_json_mode()
             elif choice == '9':
-                test_vision()
+                test_tool_usage()
             elif choice == '10':
-                test_cot_problem_solving()
+                test_vision()
             elif choice == '11':
-                test_cot_step_generation()
+                test_cot_problem_solving()
             elif choice == '12':
-                test_cot_synthesis()
+                test_cot_step_generation()
             elif choice == '13':
-                test_rag_initialization()
+                test_cot_synthesis()
             elif choice == '14':
-                test_document_loading(persistent=True)
+                test_rag_initialization()
             elif choice == '15':
-                test_document_querying()
+                test_document_loading(persistent=True)
             elif choice == '16':
-                test_rag_error_handling()
+                test_document_querying()
             elif choice == '17':
-                test_persistent_conversation()
+                test_rag_error_handling()
             elif choice == '18':
-                test_disposable_conversation()
+                test_persistent_conversation()
             elif choice == '19':
-                test_web_search()
+                test_disposable_conversation()
             elif choice == '20':
-                test_get_web_content()
+                test_response_evaluation()
             elif choice == '21':
-                test_crawl_website()
+                test_web_search()
             elif choice == '22':
-                test_scrape_url()
+                test_get_web_content()
             elif choice == '23':
+                test_crawl_website()
+            elif choice == '24':
+                test_scrape_url()
+            elif choice == '25':
+                test_autonomous_agent()
+            elif choice == '26':
                 test_web_search()
                 test_get_web_content()
                 test_crawl_website()
                 test_scrape_url()
                 print("\nAll Web tests completed successfully!")
-            elif choice == '24':
+            elif choice == '27':
                 test_rag_initialization()
                 test_document_loading(persistent=True)
                 test_document_querying()
                 test_rag_error_handling()
                 print("\nAll RAG tests completed successfully!")
-            elif choice == '25':
+            elif choice == '28':
                 test_persistent_conversation()
                 test_disposable_conversation()
                 print("\nAll Conversation tests completed successfully!")
-            elif choice == '26':
+            elif choice == '29':
+                test_get_available_models()
                 test_basic_chat_completion()
                 test_streaming_chat_completion()
                 test_override_default_model()
@@ -585,10 +655,12 @@ async def main():
                 test_rag_error_handling()
                 test_persistent_conversation()
                 test_disposable_conversation()
+                test_response_evaluation()
                 test_web_search()
                 test_get_web_content()
                 test_crawl_website()
                 test_scrape_url()
+                test_autonomous_agent()
                 print("\nAll tests completed successfully!")
             else:
                 print("Invalid choice. Please try again.")
@@ -605,6 +677,127 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+```
+
+# pocketgroq\autonomous_agent.py
+
+```python
+import time
+import logging
+import re
+from typing import List, Dict, Any, Generator
+from pocketgroq import GroqProvider
+from pocketgroq.exceptions import GroqAPIError
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+class AutonomousAgent:
+    def __init__(self, groq_provider: GroqProvider, max_sources: int = 5, search_delay: float = 2.0, model: str = "llama3-8b-8192", temperature: float = 0.0):
+        self.groq = groq_provider
+        self.max_sources = max_sources
+        self.search_delay = search_delay
+        self.model = model
+        self.temperature = temperature
+
+    def process_request(self, request: str, max_sources: int = None) -> Generator[Dict[str, str], None, None]:
+        if max_sources is not None:
+            self.max_sources = max_sources
+
+        self._inform_user(f"Processing request: '{request}'")
+        yield {"type": "research", "content": f"Processing request: '{request}'"}
+
+        initial_response = self.groq.generate(prompt=request, model=self.model, temperature=self.temperature)
+        self._inform_user(f"Initial response: {initial_response}")
+        yield {"type": "research", "content": f"Initial response: {initial_response}"}
+
+        if self._evaluate_response(request, initial_response):
+            self._inform_user("Initial response was satisfactory.")
+            yield {"type": "research", "content": "Initial response was satisfactory."}
+            yield {"type": "response", "content": initial_response}
+            return
+
+        self._inform_user("Initial response was not satisfactory. I'll search for information online.")
+        yield {"type": "research", "content": "Initial response was not satisfactory. I'll search for information online."}
+
+        search_query = self._generate_search_query(request)
+        self._inform_user(f"Generated search query: '{search_query}'")
+        yield {"type": "research", "content": f"Generated search query: '{search_query}'"}
+
+        search_results = self.groq.web_search(search_query)
+        self._inform_user(f"Found {len(search_results)} search results.")
+        yield {"type": "research", "content": f"Found {len(search_results)} search results."}
+
+        for i, result in enumerate(search_results[:self.max_sources]):
+            if i > 0:
+                time.sleep(self.search_delay)
+
+            self._inform_user(f"Checking source {i+1}: {result['url']}")
+            yield {"type": "research", "content": f"Checking source {i+1}: {result['url']}"}
+
+            try:
+                content = self.groq.get_web_content(result['url'])
+                self._inform_user(f"Retrieved content from {result['url']} (length: {len(content)} characters)")
+                yield {"type": "research", "content": f"Retrieved content from {result['url']} (length: {len(content)} characters)"}
+
+                response = self._generate_response_from_content(request, content)
+                self._inform_user(f"Generated response from content: {response}")
+                yield {"type": "research", "content": f"Generated response from content: {response}"}
+
+                if self._evaluate_response(request, response):
+                    self._inform_user("This response is satisfactory.")
+                    yield {"type": "research", "content": "This response is satisfactory."}
+                    yield {"type": "response", "content": response}
+                    return
+                else:
+                    self._inform_user("This response was not satisfactory. I'll check another source.")
+                    yield {"type": "research", "content": "This response was not satisfactory. I'll check another source."}
+            except GroqAPIError as e:
+                if e.status_code == 429:
+                    self._inform_user("I've encountered a rate limit. I'll wait for a minute before trying again.")
+                    yield {"type": "research", "content": "I've encountered a rate limit. I'll wait for a minute before trying again."}
+                    time.sleep(60)
+                else:
+                    self._inform_user(f"I encountered an error while processing {result['url']}: {str(e)}")
+                    yield {"type": "research", "content": f"I encountered an error while processing {result['url']}: {str(e)}"}
+            except Exception as e:
+                self._inform_user(f"An unexpected error occurred while processing {result['url']}: {str(e)}")
+                yield {"type": "research", "content": f"An unexpected error occurred while processing {result['url']}: {str(e)}"}
+
+        final_message = "I'm sorry, but after checking multiple sources, I couldn't find a satisfactory answer to your request."
+        self._inform_user(final_message)
+        yield {"type": "response", "content": final_message}
+
+    def _generate_search_query(self, request: str) -> str:
+        prompt = f"Generate a single, concise search query (no more than 8 words) to find current, specific information for: '{request}'. Include words like 'current' or 'today' to emphasize recency. Respond with only the search query, no other text."
+        query = self.groq.generate(prompt=prompt, model=self.model, temperature=self.temperature).strip()
+        query = query.replace('"', '').replace('`', '').strip()
+        logger.debug(f"Generated search query: {query}")
+        return query
+
+    def _generate_response_from_content(self, request: str, content: str) -> str:
+        prompt = f"Based on the following content, provide a concise and accurate answer to this request: '{request}'. Include only current, specific information. Do not use placeholders or generic responses. If the information is not available or current, state that clearly.\n\nContent: {content[:4000]}"
+        response = self.groq.generate(prompt=prompt, model=self.model, temperature=self.temperature)
+        logger.debug(f"Generated response from content: {response}")
+        return response
+
+    def _evaluate_response(self, request: str, response: str) -> bool:
+        # Check for placeholder text
+        if re.search(r'\[.*?\]', response):
+            return False
+
+        # Check for generic or non-specific responses
+        generic_phrases = ["I'm sorry", "I don't have access to real-time data", "I cannot provide current information"]
+        if any(phrase in response for phrase in generic_phrases):
+            return False
+
+        # Use the existing evaluate_response method as an additional check
+        return self.groq.evaluate_response(request, response)
+
+    def _inform_user(self, message: str):
+        print(f"Agent: {message}")
+        logger.debug(message)
 ```
 
 # pocketgroq\config.py
@@ -635,9 +828,9 @@ def get_api_key() -> str:
 ```python
 import requests
 from bs4 import BeautifulSoup
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from urllib.parse import urlparse, urljoin
-import markdown2
+import html2text
 import json
 
 class EnhancedWebTool:
@@ -647,6 +840,11 @@ class EnhancedWebTool:
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         }
+        self.html2text_converter = html2text.HTML2Text()
+        self.html2text_converter.ignore_links = False
+        self.html2text_converter.ignore_images = False
+        self.html2text_converter.ignore_emphasis = False
+        self.html2text_converter.body_width = 0  # Disable line wrapping
 
     def crawl(self, start_url: str, formats: List[str] = ["markdown"]) -> List[Dict[str, Any]]:
         visited = set()
@@ -669,7 +867,7 @@ class EnhancedWebTool:
 
         return results
 
-    def scrape_page(self, url: str, formats: List[str]) -> Optional[Dict[str, Any]]:
+    def scrape_page(self, url: str, formats: List[str]) -> Dict[str, Any]:
         try:
             response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
@@ -723,16 +921,57 @@ class EnhancedWebTool:
         return metadata
 
     def html_to_markdown(self, html_content: str) -> str:
-        return markdown2.markdown(html_content)
+        # Convert HTML to Markdown using html2text
+        markdown = self.html2text_converter.handle(html_content)
+        
+        # Clean up the markdown
+        markdown = markdown.strip()
+        
+        return markdown
+        
+        return markdown
 
     def extract_structured_data(self, soup: BeautifulSoup) -> Dict[str, Any]:
         structured_data = {}
+
+        # Extract all text content
+        all_text = soup.get_text(separator=' ', strip=True)
+        structured_data['full_text'] = all_text
+
+        # Extract headings
+        headings = {}
+        for i in range(1, 7):
+            h_tags = soup.find_all(f'h{i}')
+            if h_tags:
+                headings[f'h{i}'] = [tag.get_text(strip=True) for tag in h_tags]
+        structured_data['headings'] = headings
+
+        # Extract links
+        links = []
+        for a in soup.find_all('a', href=True):
+            links.append({
+                'text': a.get_text(strip=True),
+                'href': a['href']
+            })
+        structured_data['links'] = links
+
+        # Extract images
+        images = []
+        for img in soup.find_all('img', src=True):
+            images.append({
+                'src': img['src'],
+                'alt': img.get('alt', '')
+            })
+        structured_data['images'] = images
+
+        # Extract JSON-LD
         for script in soup.find_all('script', type='application/ld+json'):
             try:
                 data = json.loads(script.string)
-                structured_data.update(data)
+                structured_data['json_ld'] = data
             except json.JSONDecodeError:
                 pass
+
         return structured_data
 ```
 
@@ -757,8 +996,6 @@ class OllamaServerNotRunningError(Exception):
 # pocketgroq\groq_provider.py
 
 ```python
-# pocketgroq/groq_provider.py
-
 import asyncio
 import json
 import logging
@@ -811,6 +1048,24 @@ class GroqProvider(LLMInterface):
         else:
             logger.warning("Ollama server is not running. RAG functionality will be limited.")
 
+    def get_available_models(self) -> List[Dict[str, Any]]:
+        """
+        Fetch the list of available models from the Groq provider.
+
+        Returns:
+            List[Dict[str, Any]]: A list of models with their details.
+        """
+        url = "https://api.groq.com/openai/v1/models"
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            models = response.json().get("data", [])
+            return models
+        except requests.RequestException as e:
+            logger.error(f"Failed to fetch models: {e}")
+            raise GroqAPIError(f"Failed to fetch models: {e}")
+
     def crawl_website(self, url: str, formats: List[str] = ["markdown"], max_depth: int = 3, max_pages: int = 100) -> List[Dict[str, Any]]:
         """
         Crawl a website and return its content in specified formats.
@@ -843,6 +1098,34 @@ class GroqProvider(LLMInterface):
                 raise OllamaServerNotRunningError("Ollama server is not running. Please start it and try again.")
             return func(self, *args, **kwargs)
         return wrapper
+    
+    def evaluate_response(self, request: str, response: str) -> bool:
+        """
+        Evaluate if a response satisfies a given request using an AI LLM.
+        
+        Args:
+            request (str): The original request or question.
+            response (str): The response to be evaluated.
+        
+        Returns:
+            bool: True if the response is deemed satisfactory, False otherwise.
+        """
+        evaluation_prompt = f"""
+        You will be given a request and a response. Your task is to evaluate the response based on the following criteria:
+        1. **Informative and Correct**: The response must be accurate and provide clear, useful, and sufficient information to fully answer the request.
+        2. **No Uncertainty**: The response should not express any uncertainty, such as language indicating doubt (e.g., "maybe," "possibly," "it seems") or statements that are inconclusive.
+
+        Request: {request}
+        Response: {response}
+
+        Based on these criteria, is the response satisfactory? Answer with only 'Yes' or 'No'.
+        """
+
+        evaluation = self.generate(evaluation_prompt, temperature=0.0, max_tokens=1)
+        
+        # Clean up the response and convert to boolean
+        evaluation = evaluation.strip().lower()
+        return evaluation == 'yes'
 
     def register_tool(self, name: str, func: callable):
         self.tools[name] = func
@@ -1126,6 +1409,7 @@ class GroqProvider(LLMInterface):
         llm = ChatGroq(groq_api_key=self.api_key, model_name=kwargs.get("model", "llama3-8b-8192"))
         response = self.rag_manager.query_documents(llm, query)
         return response['answer']
+
 ```
 
 # pocketgroq\rag_manager.py
@@ -1369,11 +1653,10 @@ class WebTool:
 from .groq_provider import GroqProvider
 from .exceptions import GroqAPIKeyMissingError, GroqAPIError, OllamaServerNotRunningError
 from .config import get_api_key
-from .chain_of_thought import ChainOfThoughtManager, LLMInterface
+from .chain_of_thought import ChainOfThoughtManager, LLMInterface, sanitize_input, validate_cot_steps
 from .rag_manager import RAGManager
 from .web_tool import WebTool
 from .enhanced_web_tool import EnhancedWebTool
-
 
 __all__ = [
     'GroqProvider',
@@ -1383,6 +1666,8 @@ __all__ = [
     'get_api_key',
     'ChainOfThoughtManager',
     'LLMInterface',
+    'sanitize_input',
+    'validate_cot_steps',
     'RAGManager',
     'WebTool',
     'EnhancedWebTool'
@@ -1497,6 +1782,42 @@ def test_api_error(mock_groq_client):
     provider = GroqProvider(api_key='test_api_key')
     with pytest.raises(GroqAPIError):
         provider.generate("Test prompt")
+
+def test_get_available_models():
+    mock_response = {
+        "object": "list",
+        "data": [
+            {
+                "id": "gemma-7b-it",
+                "object": "model",
+                "created": 1693721698,
+                "owned_by": "Google",
+                "active": True,
+                "context_window": 8192
+            },
+            {
+                "id": "llama2-70b-4096",
+                "object": "model",
+                "created": 1693721698,
+                "owned_by": "Meta",
+                "active": True,
+                "context_window": 4096
+            }
+        ]
+    }
+
+    with patch('requests.get') as mock_get:
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = mock_response
+
+        provider = GroqProvider(api_key='test_api_key')
+        models = provider.get_available_models()
+
+        assert len(models) == 2
+        assert models[0]['id'] == "gemma-7b-it"
+        assert models[1]['id'] == "llama2-70b-4096"
+        mock_get.assert_called_once_with("https://api.groq.com/openai/v1/models")
+
 ```
 
 # pocketgroq\chain_of_thought\cot_manager.py
@@ -1591,6 +1912,7 @@ class LLMInterface(ABC):
 # pocketgroq/chain_of_thought/utils.py
 
 import re
+from typing import List
 
 def sanitize_input(text: str) -> str:
     """
@@ -1599,6 +1921,24 @@ def sanitize_input(text: str) -> str:
     # Remove potentially harmful characters or patterns
     sanitized = re.sub(r'[<>]', '', text)
     return sanitized.strip()
+
+def validate_cot_steps(steps: List[str], min_steps: int = 3) -> bool:
+    """
+    Validates the extracted Chain-of-Thought steps.
+
+    Args:
+        steps (List[str]): The list of reasoning steps.
+        min_steps (int, optional): Minimum number of steps required. Defaults to 3.
+
+    Returns:
+        bool: True if validation passes, False otherwise.
+    """
+    if len(steps) < min_steps:
+        return False
+    for step in steps:
+        if not step or len(step) < 5:  # Example criteria
+            return False
+    return True
 ```
 
 # pocketgroq\chain_of_thought\__init__.py
@@ -1727,6 +2067,126 @@ from .utils import sanitize_input
 __all__ = ['ChainOfThoughtManager', 'LLMInterface', 'sanitize_input']
 ```
 
+# build\lib\pocketgroq\autonomous_agent.py
+
+```python
+import time
+import logging
+import re
+from typing import List, Dict, Any, Generator
+from pocketgroq import GroqProvider
+from pocketgroq.exceptions import GroqAPIError
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+class AutonomousAgent:
+    def __init__(self, groq_provider: GroqProvider, max_sources: int = 5, search_delay: float = 2.0, model: str = "llama3-8b-8192", temperature: float = 0.0):
+        self.groq = groq_provider
+        self.max_sources = max_sources
+        self.search_delay = search_delay
+        self.model = model
+        self.temperature = temperature
+
+    def process_request(self, request: str, max_sources: int = None) -> Generator[Dict[str, str], None, None]:
+        if max_sources is not None:
+            self.max_sources = max_sources
+
+        self._inform_user(f"Processing request: '{request}'")
+        yield {"type": "research", "content": f"Processing request: '{request}'"}
+
+        initial_response = self.groq.generate(prompt=request, model=self.model, temperature=self.temperature)
+        self._inform_user(f"Initial response: {initial_response}")
+        yield {"type": "research", "content": f"Initial response: {initial_response}"}
+
+        if self._evaluate_response(request, initial_response):
+            self._inform_user("Initial response was satisfactory.")
+            yield {"type": "research", "content": "Initial response was satisfactory."}
+            yield {"type": "response", "content": initial_response}
+            return
+
+        self._inform_user("Initial response was not satisfactory. I'll search for information online.")
+        yield {"type": "research", "content": "Initial response was not satisfactory. I'll search for information online."}
+
+        search_query = self._generate_search_query(request)
+        self._inform_user(f"Generated search query: '{search_query}'")
+        yield {"type": "research", "content": f"Generated search query: '{search_query}'"}
+
+        search_results = self.groq.web_search(search_query)
+        self._inform_user(f"Found {len(search_results)} search results.")
+        yield {"type": "research", "content": f"Found {len(search_results)} search results."}
+
+        for i, result in enumerate(search_results[:self.max_sources]):
+            if i > 0:
+                time.sleep(self.search_delay)
+
+            self._inform_user(f"Checking source {i+1}: {result['url']}")
+            yield {"type": "research", "content": f"Checking source {i+1}: {result['url']}"}
+
+            try:
+                content = self.groq.get_web_content(result['url'])
+                self._inform_user(f"Retrieved content from {result['url']} (length: {len(content)} characters)")
+                yield {"type": "research", "content": f"Retrieved content from {result['url']} (length: {len(content)} characters)"}
+
+                response = self._generate_response_from_content(request, content)
+                self._inform_user(f"Generated response from content: {response}")
+                yield {"type": "research", "content": f"Generated response from content: {response}"}
+
+                if self._evaluate_response(request, response):
+                    self._inform_user("This response is satisfactory.")
+                    yield {"type": "research", "content": "This response is satisfactory."}
+                    yield {"type": "response", "content": response}
+                    return
+                else:
+                    self._inform_user("This response was not satisfactory. I'll check another source.")
+                    yield {"type": "research", "content": "This response was not satisfactory. I'll check another source."}
+            except GroqAPIError as e:
+                if e.status_code == 429:
+                    self._inform_user("I've encountered a rate limit. I'll wait for a minute before trying again.")
+                    yield {"type": "research", "content": "I've encountered a rate limit. I'll wait for a minute before trying again."}
+                    time.sleep(60)
+                else:
+                    self._inform_user(f"I encountered an error while processing {result['url']}: {str(e)}")
+                    yield {"type": "research", "content": f"I encountered an error while processing {result['url']}: {str(e)}"}
+            except Exception as e:
+                self._inform_user(f"An unexpected error occurred while processing {result['url']}: {str(e)}")
+                yield {"type": "research", "content": f"An unexpected error occurred while processing {result['url']}: {str(e)}"}
+
+        final_message = "I'm sorry, but after checking multiple sources, I couldn't find a satisfactory answer to your request."
+        self._inform_user(final_message)
+        yield {"type": "response", "content": final_message}
+
+    def _generate_search_query(self, request: str) -> str:
+        prompt = f"Generate a single, concise search query (no more than 8 words) to find current, specific information for: '{request}'. Include words like 'current' or 'today' to emphasize recency. Respond with only the search query, no other text."
+        query = self.groq.generate(prompt=prompt, model=self.model, temperature=self.temperature).strip()
+        query = query.replace('"', '').replace('`', '').strip()
+        logger.debug(f"Generated search query: {query}")
+        return query
+
+    def _generate_response_from_content(self, request: str, content: str) -> str:
+        prompt = f"Based on the following content, provide a concise and accurate answer to this request: '{request}'. Include only current, specific information. Do not use placeholders or generic responses. If the information is not available or current, state that clearly.\n\nContent: {content[:4000]}"
+        response = self.groq.generate(prompt=prompt, model=self.model, temperature=self.temperature)
+        logger.debug(f"Generated response from content: {response}")
+        return response
+
+    def _evaluate_response(self, request: str, response: str) -> bool:
+        # Check for placeholder text
+        if re.search(r'\[.*?\]', response):
+            return False
+
+        # Check for generic or non-specific responses
+        generic_phrases = ["I'm sorry", "I don't have access to real-time data", "I cannot provide current information"]
+        if any(phrase in response for phrase in generic_phrases):
+            return False
+
+        # Use the existing evaluate_response method as an additional check
+        return self.groq.evaluate_response(request, response)
+
+    def _inform_user(self, message: str):
+        print(f"Agent: {message}")
+        logger.debug(message)
+```
+
 # build\lib\pocketgroq\config.py
 
 ```python
@@ -1755,9 +2215,9 @@ def get_api_key() -> str:
 ```python
 import requests
 from bs4 import BeautifulSoup
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from urllib.parse import urlparse, urljoin
-import markdown2
+import html2text
 import json
 
 class EnhancedWebTool:
@@ -1767,6 +2227,11 @@ class EnhancedWebTool:
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         }
+        self.html2text_converter = html2text.HTML2Text()
+        self.html2text_converter.ignore_links = False
+        self.html2text_converter.ignore_images = False
+        self.html2text_converter.ignore_emphasis = False
+        self.html2text_converter.body_width = 0  # Disable line wrapping
 
     def crawl(self, start_url: str, formats: List[str] = ["markdown"]) -> List[Dict[str, Any]]:
         visited = set()
@@ -1789,7 +2254,7 @@ class EnhancedWebTool:
 
         return results
 
-    def scrape_page(self, url: str, formats: List[str]) -> Optional[Dict[str, Any]]:
+    def scrape_page(self, url: str, formats: List[str]) -> Dict[str, Any]:
         try:
             response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
@@ -1843,16 +2308,57 @@ class EnhancedWebTool:
         return metadata
 
     def html_to_markdown(self, html_content: str) -> str:
-        return markdown2.markdown(html_content)
+        # Convert HTML to Markdown using html2text
+        markdown = self.html2text_converter.handle(html_content)
+        
+        # Clean up the markdown
+        markdown = markdown.strip()
+        
+        return markdown
+        
+        return markdown
 
     def extract_structured_data(self, soup: BeautifulSoup) -> Dict[str, Any]:
         structured_data = {}
+
+        # Extract all text content
+        all_text = soup.get_text(separator=' ', strip=True)
+        structured_data['full_text'] = all_text
+
+        # Extract headings
+        headings = {}
+        for i in range(1, 7):
+            h_tags = soup.find_all(f'h{i}')
+            if h_tags:
+                headings[f'h{i}'] = [tag.get_text(strip=True) for tag in h_tags]
+        structured_data['headings'] = headings
+
+        # Extract links
+        links = []
+        for a in soup.find_all('a', href=True):
+            links.append({
+                'text': a.get_text(strip=True),
+                'href': a['href']
+            })
+        structured_data['links'] = links
+
+        # Extract images
+        images = []
+        for img in soup.find_all('img', src=True):
+            images.append({
+                'src': img['src'],
+                'alt': img.get('alt', '')
+            })
+        structured_data['images'] = images
+
+        # Extract JSON-LD
         for script in soup.find_all('script', type='application/ld+json'):
             try:
                 data = json.loads(script.string)
-                structured_data.update(data)
+                structured_data['json_ld'] = data
             except json.JSONDecodeError:
                 pass
+
         return structured_data
 ```
 
@@ -1877,8 +2383,6 @@ class OllamaServerNotRunningError(Exception):
 # build\lib\pocketgroq\groq_provider.py
 
 ```python
-# pocketgroq/groq_provider.py
-
 import asyncio
 import json
 import logging
@@ -1931,6 +2435,24 @@ class GroqProvider(LLMInterface):
         else:
             logger.warning("Ollama server is not running. RAG functionality will be limited.")
 
+    def get_available_models(self) -> List[Dict[str, Any]]:
+        """
+        Fetch the list of available models from the Groq provider.
+
+        Returns:
+            List[Dict[str, Any]]: A list of models with their details.
+        """
+        url = "https://api.groq.com/openai/v1/models"
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            models = response.json().get("data", [])
+            return models
+        except requests.RequestException as e:
+            logger.error(f"Failed to fetch models: {e}")
+            raise GroqAPIError(f"Failed to fetch models: {e}")
+
     def crawl_website(self, url: str, formats: List[str] = ["markdown"], max_depth: int = 3, max_pages: int = 100) -> List[Dict[str, Any]]:
         """
         Crawl a website and return its content in specified formats.
@@ -1963,6 +2485,34 @@ class GroqProvider(LLMInterface):
                 raise OllamaServerNotRunningError("Ollama server is not running. Please start it and try again.")
             return func(self, *args, **kwargs)
         return wrapper
+    
+    def evaluate_response(self, request: str, response: str) -> bool:
+        """
+        Evaluate if a response satisfies a given request using an AI LLM.
+        
+        Args:
+            request (str): The original request or question.
+            response (str): The response to be evaluated.
+        
+        Returns:
+            bool: True if the response is deemed satisfactory, False otherwise.
+        """
+        evaluation_prompt = f"""
+        You will be given a request and a response. Your task is to evaluate the response based on the following criteria:
+        1. **Informative and Correct**: The response must be accurate and provide clear, useful, and sufficient information to fully answer the request.
+        2. **No Uncertainty**: The response should not express any uncertainty, such as language indicating doubt (e.g., "maybe," "possibly," "it seems") or statements that are inconclusive.
+
+        Request: {request}
+        Response: {response}
+
+        Based on these criteria, is the response satisfactory? Answer with only 'Yes' or 'No'.
+        """
+
+        evaluation = self.generate(evaluation_prompt, temperature=0.0, max_tokens=1)
+        
+        # Clean up the response and convert to boolean
+        evaluation = evaluation.strip().lower()
+        return evaluation == 'yes'
 
     def register_tool(self, name: str, func: callable):
         self.tools[name] = func
@@ -2246,6 +2796,7 @@ class GroqProvider(LLMInterface):
         llm = ChatGroq(groq_api_key=self.api_key, model_name=kwargs.get("model", "llama3-8b-8192"))
         response = self.rag_manager.query_documents(llm, query)
         return response['answer']
+
 ```
 
 # build\lib\pocketgroq\rag_manager.py
@@ -2487,13 +3038,27 @@ class WebTool:
 # pocketgroq/__init__.py
 
 from .groq_provider import GroqProvider
-from .exceptions import GroqAPIKeyMissingError, GroqAPIError
+from .exceptions import GroqAPIKeyMissingError, GroqAPIError, OllamaServerNotRunningError
 from .config import get_api_key
-from .chain_of_thought.cot_manager import ChainOfThoughtManager
-from .chain_of_thought.llm_interface import LLMInterface
+from .chain_of_thought import ChainOfThoughtManager, LLMInterface, sanitize_input, validate_cot_steps
 from .rag_manager import RAGManager
+from .web_tool import WebTool
+from .enhanced_web_tool import EnhancedWebTool
 
-__all__ = ['GroqProvider', 'GroqAPIKeyMissingError', 'GroqAPIError', 'get_api_key', 'ChainOfThoughtManager', 'LLMInterface', 'RAGManager']
+__all__ = [
+    'GroqProvider',
+    'GroqAPIKeyMissingError',
+    'GroqAPIError',
+    'OllamaServerNotRunningError',
+    'get_api_key',
+    'ChainOfThoughtManager',
+    'LLMInterface',
+    'sanitize_input',
+    'validate_cot_steps',
+    'RAGManager',
+    'WebTool',
+    'EnhancedWebTool'
+]
 ```
 
 # build\lib\pocketgroq\chain_of_thought\cot_manager.py
@@ -2501,155 +3066,58 @@ __all__ = ['GroqProvider', 'GroqAPIKeyMissingError', 'GroqAPIError', 'get_api_ke
 ```python
 # pocketgroq/chain_of_thought/cot_manager.py
 
-from typing import List, Optional
+from typing import List
 from .llm_interface import LLMInterface
-from .utils import sanitize_input, validate_cot_steps
-import logging
-
-# Configure logging for debugging and monitoring
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from .utils import sanitize_input
 
 class ChainOfThoughtManager:
     """
-    Manages the Chain-of-Thought reasoning process with enhanced prompting
-    to ensure robustness, precision, and efficiency.
+    Manages the Chain-of-Thought reasoning process.
     """
-
-    def __init__(self, llm: LLMInterface, cot_prompt_template: Optional[str] = None):
+    def __init__(self, llm: LLMInterface, cot_prompt_template: str = None):
         """
         Initialize with an LLM instance and an optional CoT prompt template.
-
-        Args:
-            llm (LLMInterface): An instance of a class that implements the LLMInterface.
-            cot_prompt_template (str, optional): Custom template for generating CoT prompts.
-                                                  If None, a default robust template is used.
         """
         self.llm = llm
-        self.cot_prompt_template = cot_prompt_template or self._default_cot_prompt()
-        logger.debug("Initialized ChainOfThoughtManager with custom prompt template.")
-
-    def _default_cot_prompt(self) -> str:
-        """
-        Provides a robust default Chain-of-Thought prompt template.
-
-        Returns:
-            str: The default prompt template.
-        """
-        return (
-            "You are an expert problem solver. Carefully analyze the following problem and provide a detailed, step-by-step reasoning process leading to the solution.\n\n"
-            "Problem: {problem}\n\n"
-            "Solution Steps:"
+        self.cot_prompt_template = cot_prompt_template or (
+            "Solve the following problem step by step:\n\n{problem}\n\nSolution:"
         )
 
     def generate_cot(self, problem: str) -> List[str]:
         """
         Generate intermediate reasoning steps (Chain-of-Thought) for the given problem.
-
-        Args:
-            problem (str): The problem statement to solve.
-
-        Returns:
-            List[str]: A list of reasoning steps.
         """
         sanitized_problem = sanitize_input(problem)
         prompt = self.cot_prompt_template.format(problem=sanitized_problem)
-        logger.debug(f"Generated prompt for CoT: {prompt}")
-
         response = self.llm.generate(prompt)
-        logger.debug(f"Received response from LLM: {response}")
-
         cot_steps = self._parse_cot(response)
-        logger.info(f"Generated {len(cot_steps)} reasoning steps.")
-
-        # Validate the extracted CoT steps
-        if not validate_cot_steps(cot_steps):
-            logger.warning("Validation failed for the extracted CoT steps.")
-            raise ValueError("Invalid Chain-of-Thought steps extracted from LLM response.")
-
         return cot_steps
 
     def synthesize_response(self, cot_steps: List[str]) -> str:
         """
         Synthesize the final answer from the Chain-of-Thought steps.
-
-        Args:
-            cot_steps (List[str]): A list of reasoning steps.
-
-        Returns:
-            str: The final synthesized answer.
         """
-        synthesis_prompt = (
-            "Based on the following detailed reasoning steps, provide a clear and concise answer to the original problem.\n\n"
-            "Reasoning Steps:\n"
-            + "\n".join([f"{idx + 1}. {step}" for idx, step in enumerate(cot_steps)]) +
-            "\n\nAnswer:"
-        )
-        logger.debug(f"Synthesis prompt: {synthesis_prompt}")
-
-        final_response = self.llm.generate(synthesis_prompt, max_tokens=200)
-        logger.debug(f"Received synthesized answer: {final_response}")
-
-        answer = final_response.strip()
-
-        # Basic validation to ensure an answer was generated
-        if not answer:
-            logger.error("No answer generated during synthesis.")
-            raise ValueError("Failed to generate a synthesized answer from CoT steps.")
-
-        return answer
+        synthesis_prompt = "Based on the following reasoning steps, provide a concise answer:\n\n"
+        synthesis_prompt += "\n".join(cot_steps) + "\n\nAnswer:"
+        final_response = self.llm.generate(synthesis_prompt)
+        return final_response.strip()
 
     def solve_problem(self, problem: str) -> str:
         """
         Complete process to solve a problem using Chain-of-Thought.
-
-        Args:
-            problem (str): The problem statement to solve.
-
-        Returns:
-            str: The final answer to the problem.
         """
-        logger.info(f"Solving problem: {problem}")
-        try:
-            cot = self.generate_cot(problem)
-            answer = self.synthesize_response(cot)
-            logger.info("Problem solved successfully.")
-            return answer
-        except Exception as e:
-            logger.error(f"An error occurred while solving the problem: {e}")
-            raise
+        cot = self.generate_cot(problem)
+        answer = self.synthesize_response(cot)
+        return answer
 
     def _parse_cot(self, response: str) -> List[str]:
         """
         Parse the LLM response to extract individual reasoning steps.
-        Enhanced to handle various formatting styles for robustness.
-
-        Args:
-            response (str): The raw response from the LLM.
-
-        Returns:
-            List[str]: A list of extracted reasoning steps.
+        This method can be customized based on how the LLM formats its output.
         """
-        steps = []
-        logger.debug("Parsing Chain-of-Thought steps from response.")
-
-        # Attempt to parse numbered or bulleted lists
-        lines = response.split('\n')
-        for line in lines:
-            # Match patterns like "1. Step one" or "- Step one" or "* Step one"
-            if line.strip().startswith(('1.', '2.', '3.', '4.', '5.', '-', '*')):
-                # Remove leading numbering or bullets
-                step = line.strip().lstrip('1234567890.').lstrip('-*').strip()
-                if step:
-                    steps.append(step)
-            else:
-                # If no clear list formatting, consider the entire response as a single step
-                if not steps and line.strip():
-                    steps.append(line.strip())
-
-        logger.debug(f"Extracted steps: {steps}")
+        # Simple split by newline for demonstration; can be enhanced.
+        steps = [line.strip() for line in response.split('\n') if line.strip()]
         return steps
-
 ```
 
 # build\lib\pocketgroq\chain_of_thought\llm_interface.py
@@ -2712,7 +3180,6 @@ def validate_cot_steps(steps: List[str], min_steps: int = 3) -> bool:
         if not step or len(step) < 5:  # Example criteria
             return False
     return True
-
 ```
 
 # build\lib\pocketgroq\chain_of_thought\__init__.py
@@ -2722,8 +3189,8 @@ def validate_cot_steps(steps: List[str], min_steps: int = 3) -> bool:
 
 from .cot_manager import ChainOfThoughtManager
 from .llm_interface import LLMInterface
-from .utils import sanitize_input
+from .utils import sanitize_input, validate_cot_steps
 
-__all__ = ['ChainOfThoughtManager', 'LLMInterface', 'sanitize_input']
+__all__ = ['ChainOfThoughtManager', 'LLMInterface', 'sanitize_input', 'validate_cot_steps']
 ```
 
