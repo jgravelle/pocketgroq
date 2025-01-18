@@ -12,3 +12,4 @@ faiss-cpu>=1.8.0.post1
 ollama>=0.3.3
 html2text>=2024.2.26
 streamlit
+pillow

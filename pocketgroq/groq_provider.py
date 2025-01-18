@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import io
 import json
 import logging
 import os
@@ -9,6 +11,7 @@ from collections import defaultdict
 from groq import Groq, AsyncGroq
 from langchain_groq import ChatGroq
 from langchain_community.embeddings import OllamaEmbeddings
+from PIL import ImageGrab
 from typing import Callable, Dict, Any, List, Union, AsyncIterator, Optional
 
 from .enhanced_web_tool import EnhancedWebTool
@@ -17,6 +20,7 @@ from .web_tool import WebTool
 from .chain_of_thought.cot_manager import ChainOfThoughtManager
 from .chain_of_thought.llm_interface import LLMInterface
 from .rag_manager import RAGManager
+from .vision import VisionProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +42,7 @@ class GroqProvider(LLMInterface):
         self.rag_persistent = rag_persistent
         self.rag_index_path = rag_index_path
         self.enhanced_web_tool = EnhancedWebTool()
+        self.vision_processor = VisionProcessor()
 
         # Initialize conversation sessions
         self.conversation_sessions = defaultdict(list)  # session_id -> list of messages
@@ -128,7 +133,156 @@ class GroqProvider(LLMInterface):
         # Clean up the response and convert to boolean
         evaluation = evaluation.strip().lower()
         return evaluation == 'yes'
+    
+    def process_image(self, prompt: str, image_source: str) -> str:
+        """
+        Process an image with a text prompt.
+        
+        Args:
+            prompt: Text describing what to analyze in the image
+            image_source: URL of the image to analyze
+            
+        Returns:
+            str: Model's response analyzing the image
+        """
+        # Get vision model from available models
+        vision_models = [
+            model['id'] for model in self.get_available_models() 
+            if 'vision' in model['id'].lower()
+        ]
+        
+        if not vision_models:
+            raise ValueError("No vision models available")
+        
+        model = vision_models[0]  # Use first available vision model
+        
+        # Prepare the message with text and image
+        messages = [{
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": prompt
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": image_source
+                    }
+                }
+            ]
+        }]
+        
+        # Call the API
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1024
+        )
+        
+        # Return the response content
+        return response.choices[0].message.content
 
+    def process_image_conversation(
+        self,
+        messages: List[Dict[str, Any]],
+        model: str = None,
+        **kwargs
+    ) -> str:
+        """
+        Handle a multi-turn conversation that includes images.
+        
+        Args:
+            messages (List[Dict[str, Any]]): List of conversation messages
+            model (str, optional): Vision model to use. If None, uses first available vision model
+            **kwargs: Additional parameters for completion
+            
+        Returns:
+            str: Model's response
+            
+        Raises:
+            ValueError: If no vision models available
+            GroqAPIError: If API call fails
+        """
+        # Get available vision models
+        vision_models = VisionProcessor.get_vision_models(self)
+        if not vision_models:
+            raise ValueError("No vision models are currently available")
+            
+        # If no model specified, use the first available vision model
+        if model is None:
+            model = vision_models[0]
+            logger.info(f"Using default vision model: {model}")
+        elif not VisionProcessor.validate_vision_model(model, self):
+            available_models = ", ".join(vision_models)
+            raise ValueError(
+                f"Model {model} does not support vision. Available vision models: {available_models}"
+            )
+
+        try:
+            completion_kwargs = {
+                "model": model,
+                "messages": messages,
+                "temperature": kwargs.get("temperature", 0.7),
+                "max_tokens": kwargs.get("max_tokens", 1024),
+                "top_p": kwargs.get("top_p", 1),
+                "stream": kwargs.get("stream", False),
+            }
+
+            response = self._create_completion(**completion_kwargs)
+            return response
+
+        except Exception as e:
+            logger.error(f"Error in vision conversation: {str(e)}")
+            raise GroqAPIError(f"Failed to process vision conversation: {str(e)}")
+        
+    def process_image_desktop(self, prompt: str, region=None) -> str:
+        """
+        Analyze what's currently displayed on the user's monitor.
+        
+        Args:
+            prompt (str): Text describing what to analyze in the screen capture
+            region (tuple, optional): Region to capture (left, top, right, bottom). None for full screen.
+            
+        Returns:
+            str: Model's analysis of the screen contents
+            
+        Raises:
+            ValueError: If screen capture fails or no vision models available
+        """
+        try:
+            # Capture screen
+            screen = ImageGrab.grab(bbox=region)
+            
+            # Convert to base64
+            buffer = io.BytesIO()
+            screen.save(buffer, format="PNG")
+            img_str = base64.b64encode(buffer.getvalue()).decode()
+            img_data = f"data:image/png;base64,{img_str}"
+            
+            # Process using existing vision functionality
+            return self.process_image(prompt=prompt, image_source=img_data)
+            
+        except Exception as e:
+            raise ValueError(f"Failed to capture or process screen: {str(e)}")    
+        
+    def process_image_desktop_region(self, prompt: str, x1: int, y1: int, x2: int, y2: int) -> str:
+        """
+        Analyze a specific region of the user's monitor.
+        
+        Args:
+            prompt (str): Text describing what to analyze
+            x1 (int): Left coordinate
+            y1 (int): Top coordinate
+            x2 (int): Right coordinate
+            y2 (int): Bottom coordinate
+            
+        Returns:
+            str: Model's analysis of the screen region
+        """
+        return self.process_image_desktop(prompt, region=(x1, y1, x2, y2))                                                                          
+    
     def register_tool(self, name: str, func: callable):
         self.tools[name] = func
 

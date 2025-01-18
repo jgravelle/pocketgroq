@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="pocketgroq",
-    version="0.5.5",
+    version="0.5.6",
     author="PocketGroq Team",
     author_email="j@gravelle.us",
     description="A library for easy integration with Groq API, including web scraping, image handling, and Chain of Thought reasoning",
