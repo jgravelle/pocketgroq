@@ -1023,6 +1023,8 @@ class OllamaServerNotRunningError(Exception):
 
 ```python
 import asyncio
+import base64
+import io
 import json
 import logging
 import os
@@ -1033,6 +1035,7 @@ from collections import defaultdict
 from groq import Groq, AsyncGroq
 from langchain_groq import ChatGroq
 from langchain_community.embeddings import OllamaEmbeddings
+from PIL import ImageGrab
 from typing import Callable, Dict, Any, List, Union, AsyncIterator, Optional
 
 from .enhanced_web_tool import EnhancedWebTool
@@ -1041,6 +1044,8 @@ from .web_tool import WebTool
 from .chain_of_thought.cot_manager import ChainOfThoughtManager
 from .chain_of_thought.llm_interface import LLMInterface
 from .rag_manager import RAGManager
+from .speech import SpeechProcessor
+from .vision import VisionProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -1062,6 +1067,8 @@ class GroqProvider(LLMInterface):
         self.rag_persistent = rag_persistent
         self.rag_index_path = rag_index_path
         self.enhanced_web_tool = EnhancedWebTool()
+        self.vision_processor = VisionProcessor()
+        self.speech_processor = SpeechProcessor()
 
         # Initialize conversation sessions
         self.conversation_sessions = defaultdict(list)  # session_id -> list of messages
@@ -1152,7 +1159,156 @@ class GroqProvider(LLMInterface):
         # Clean up the response and convert to boolean
         evaluation = evaluation.strip().lower()
         return evaluation == 'yes'
+    
+    def process_image(self, prompt: str, image_source: str) -> str:
+        """
+        Process an image with a text prompt.
+        
+        Args:
+            prompt: Text describing what to analyze in the image
+            image_source: URL of the image to analyze
+            
+        Returns:
+            str: Model's response analyzing the image
+        """
+        # Get vision model from available models
+        vision_models = [
+            model['id'] for model in self.get_available_models() 
+            if 'vision' in model['id'].lower()
+        ]
+        
+        if not vision_models:
+            raise ValueError("No vision models available")
+        
+        model = vision_models[0]  # Use first available vision model
+        
+        # Prepare the message with text and image
+        messages = [{
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": prompt
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": image_source
+                    }
+                }
+            ]
+        }]
+        
+        # Call the API
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1024
+        )
+        
+        # Return the response content
+        return response.choices[0].message.content
 
+    def process_image_conversation(
+        self,
+        messages: List[Dict[str, Any]],
+        model: str = None,
+        **kwargs
+    ) -> str:
+        """
+        Handle a multi-turn conversation that includes images.
+        
+        Args:
+            messages (List[Dict[str, Any]]): List of conversation messages
+            model (str, optional): Vision model to use. If None, uses first available vision model
+            **kwargs: Additional parameters for completion
+            
+        Returns:
+            str: Model's response
+            
+        Raises:
+            ValueError: If no vision models available
+            GroqAPIError: If API call fails
+        """
+        # Get available vision models
+        vision_models = VisionProcessor.get_vision_models(self)
+        if not vision_models:
+            raise ValueError("No vision models are currently available")
+            
+        # If no model specified, use the first available vision model
+        if model is None:
+            model = vision_models[0]
+            logger.info(f"Using default vision model: {model}")
+        elif not VisionProcessor.validate_vision_model(model, self):
+            available_models = ", ".join(vision_models)
+            raise ValueError(
+                f"Model {model} does not support vision. Available vision models: {available_models}"
+            )
+
+        try:
+            completion_kwargs = {
+                "model": model,
+                "messages": messages,
+                "temperature": kwargs.get("temperature", 0.7),
+                "max_tokens": kwargs.get("max_tokens", 1024),
+                "top_p": kwargs.get("top_p", 1),
+                "stream": kwargs.get("stream", False),
+            }
+
+            response = self._create_completion(**completion_kwargs)
+            return response
+
+        except Exception as e:
+            logger.error(f"Error in vision conversation: {str(e)}")
+            raise GroqAPIError(f"Failed to process vision conversation: {str(e)}")
+        
+    def process_image_desktop(self, prompt: str, region=None) -> str:
+        """
+        Analyze what's currently displayed on the user's monitor.
+        
+        Args:
+            prompt (str): Text describing what to analyze in the screen capture
+            region (tuple, optional): Region to capture (left, top, right, bottom). None for full screen.
+            
+        Returns:
+            str: Model's analysis of the screen contents
+            
+        Raises:
+            ValueError: If screen capture fails or no vision models available
+        """
+        try:
+            # Capture screen
+            screen = ImageGrab.grab(bbox=region)
+            
+            # Convert to base64
+            buffer = io.BytesIO()
+            screen.save(buffer, format="PNG")
+            img_str = base64.b64encode(buffer.getvalue()).decode()
+            img_data = f"data:image/png;base64,{img_str}"
+            
+            # Process using existing vision functionality
+            return self.process_image(prompt=prompt, image_source=img_data)
+            
+        except Exception as e:
+            raise ValueError(f"Failed to capture or process screen: {str(e)}")    
+        
+    def process_image_desktop_region(self, prompt: str, x1: int, y1: int, x2: int, y2: int) -> str:
+        """
+        Analyze a specific region of the user's monitor.
+        
+        Args:
+            prompt (str): Text describing what to analyze
+            x1 (int): Left coordinate
+            y1 (int): Top coordinate
+            x2 (int): Right coordinate
+            y2 (int): Bottom coordinate
+            
+        Returns:
+            str: Model's analysis of the screen region
+        """
+        return self.process_image_desktop(prompt, region=(x1, y1, x2, y2))                                                                          
+    
     def register_tool(self, name: str, func: callable):
         self.tools[name] = func
 
@@ -1168,6 +1324,129 @@ class GroqProvider(LLMInterface):
             Dict[str, Any]: The scraped content in specified formats.
         """
         return self.enhanced_web_tool.scrape_page(url, formats)
+    
+    def transcribe_audio(
+        self, 
+        audio_file: str, 
+        language: Optional[str] = None,
+        prompt: Optional[str] = None,
+        response_format: str = "json",
+        temperature: float = 0
+    ) -> str:
+        """
+        Transcribe audio file to text.
+        
+        Args:
+            audio_file: Path to audio file
+            language: ISO language code (e.g., 'en' for English)
+            prompt: Optional context or spelling guidance
+            response_format: 'json', 'verbose_json', or 'text'
+            temperature: Value between 0 and 1 for output variation
+            
+        Returns:
+            str: Transcribed text
+            
+        Raises:
+            ValueError: If audio file is invalid or no speech models available
+        """
+        # Validate audio file
+        self.speech_processor.validate_audio_file(audio_file)
+        
+        # Get available speech models
+        speech_models = self.speech_processor.get_speech_models(self)
+        if not speech_models:
+            raise ValueError("No speech models available")
+        
+        # Default to fastest model
+        model = next((m for m in speech_models if 'turbo' in m), speech_models[0])
+        
+        # Prepare file upload
+        with open(audio_file, 'rb') as f:
+            files = {
+                'file': ('audio.wav', f, 'audio/wav')
+            }
+            
+            # Prepare form data
+            form = {
+                'model': model,
+                'response_format': response_format,
+                'temperature': temperature
+            }
+            
+            if language:
+                form['language'] = language
+            if prompt:
+                form['prompt'] = prompt
+                
+            # Make API request
+            response = self.client.audio.transcriptions.create(
+                **form,
+                file=files['file'][1]
+            )
+            
+            if response_format == 'text':
+                return response
+            else:
+                return response.text
+
+    def translate_audio(
+        self,
+        audio_file: str,
+        prompt: Optional[str] = None,
+        response_format: str = "json",
+        temperature: float = 0
+    ) -> str:
+        """
+        Translate audio file to English text.
+        
+        Args:
+            audio_file: Path to audio file
+            prompt: Optional context or spelling guidance
+            response_format: 'json', 'verbose_json', or 'text'
+            temperature: Value between 0 and 1 for output variation
+            
+        Returns:
+            str: Translated English text
+            
+        Raises:
+            ValueError: If audio file is invalid or no translation models available
+        """
+        # Validate audio file
+        self.speech_processor.validate_audio_file(audio_file)
+        
+        # Get available speech models that support translation
+        speech_models = self.speech_processor.get_speech_models(self)
+        translation_model = next((m for m in speech_models if 'large-v3' in m and 'turbo' not in m), None)
+        
+        if not translation_model:
+            raise ValueError("No translation-capable models available")
+        
+        # Prepare file upload
+        with open(audio_file, 'rb') as f:
+            files = {
+                'file': ('audio.wav', f, 'audio/wav')
+            }
+            
+            # Prepare form data
+            form = {
+                'model': translation_model,
+                'response_format': response_format,
+                'temperature': temperature
+            }
+            
+            if prompt:
+                form['prompt'] = prompt
+                
+            # Make API request
+            response = self.client.audio.translations.create(
+                **form,
+                file=files['file'][1]
+            )
+            
+            if response_format == 'text':
+                return response
+            else:
+                return response.text
 
     def end_conversation(self, conversation_id: str):
         """
@@ -1525,6 +1804,83 @@ class RAGManager:
 
 ```
 
+# pocketgroq\speech.py
+
+```python
+import os
+import mimetypes
+import logging
+from typing import Optional, Dict, Any, List
+from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
+
+class SpeechProcessor:
+    """Handles speech-related functionality for the GroqProvider class."""
+    
+    MAX_FILE_SIZE = 25 * 1024 * 1024  # 25MB
+    SUPPORTED_FORMATS = {'flac', 'mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'ogg', 'wav', 'webm'}
+    MIN_LENGTH = 0.01  # seconds
+    MIN_BILLED_LENGTH = 10  # seconds
+    
+    @classmethod
+    def get_speech_models(cls, groq_provider) -> List[str]:
+        """
+        Get list of available speech models from Groq API.
+        
+        Args:
+            groq_provider: Instance of GroqProvider to use for API calls
+            
+        Returns:
+            List[str]: List of model IDs that support speech processing
+        """
+        try:
+            all_models = groq_provider.get_available_models()
+            speech_models = [
+                model['id'] for model in all_models 
+                if 'whisper' in model['id'].lower()
+            ]
+            return speech_models
+        except Exception as e:
+            logger.error(f"Failed to fetch speech models: {str(e)}")
+            return []
+            
+    @staticmethod
+    def validate_audio_file(file_path: str) -> None:
+        """
+        Validate audio file meets requirements.
+        
+        Args:
+            file_path: Path to audio file
+            
+        Raises:
+            ValueError: If file is invalid
+            FileNotFoundError: If file doesn't exist
+        """
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Audio file not found: {file_path}")
+            
+        # Check file size
+        file_size = os.path.getsize(file_path)
+        if file_size > SpeechProcessor.MAX_FILE_SIZE:
+            raise ValueError(
+                f"Audio file size ({file_size} bytes) exceeds maximum allowed size "
+                f"({SpeechProcessor.MAX_FILE_SIZE} bytes)"
+            )
+            
+        # Check file format
+        mime_type = mimetypes.guess_type(file_path)[0]
+        if not mime_type:
+            raise ValueError(f"Could not determine file type for: {file_path}")
+            
+        file_ext = mime_type.split('/')[-1]
+        if file_ext not in SpeechProcessor.SUPPORTED_FORMATS:
+            raise ValueError(
+                f"Unsupported audio format: {file_ext}. Must be one of: "
+                f"{', '.join(SpeechProcessor.SUPPORTED_FORMATS)}"
+            )
+```
+
 # pocketgroq\utils.py
 
 ```python
@@ -1538,6 +1894,177 @@ def load_environment():
 def get_env_variable(var_name: str, default: str = None) -> str:
     """Retrieve an environment variable or return a default value."""
     return os.getenv(var_name, default)
+```
+
+# pocketgroq\vision.py
+
+```python
+# pocketgroq/vision.py
+
+import base64
+import os
+from typing import Dict, Any, List, Union
+import mimetypes
+import logging
+from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
+
+class VisionProcessor:
+    """
+    Handles vision-related functionality for the GroqProvider class.
+    """
+    
+    @staticmethod
+    def get_vision_models(groq_provider) -> List[str]:
+        """
+        Get list of available vision models from Groq API.
+        
+        Args:
+            groq_provider: Instance of GroqProvider to use for API calls
+            
+        Returns:
+            List[str]: List of model IDs that support vision capabilities
+        """
+        try:
+            all_models = groq_provider.get_available_models()
+            vision_models = [
+                model['id'] for model in all_models 
+                if 'vision' in model['id'].lower()
+            ]
+            return vision_models
+        except Exception as e:
+            logger.error(f"Failed to fetch vision models: {str(e)}")
+            return []
+    
+    MAX_URL_IMAGE_SIZE = 20 * 1024 * 1024  # 20MB
+    MAX_BASE64_IMAGE_SIZE = 4 * 1024 * 1024  # 4MB
+    
+    SUPPORTED_IMAGE_FORMATS = {
+        'image/jpeg', 'image/png', 'image/gif', 
+        'image/webp', 'image/bmp', 'image/tiff'
+    }
+
+    @classmethod
+    def validate_vision_model(cls, model: str, groq_provider) -> bool:
+        """
+        Validate if the provided model supports vision capabilities.
+        
+        Args:
+            model (str): Model ID to validate
+            groq_provider: Instance of GroqProvider to use for API calls
+            
+        Returns:
+            bool: True if model supports vision, False otherwise
+        """
+        vision_models = cls.get_vision_models(groq_provider)
+        return model in vision_models
+
+    @staticmethod
+    def encode_image(image_path: str) -> str:
+        """
+        Encode a local image file to base64.
+        
+        Args:
+            image_path (str): Path to the local image file.
+            
+        Returns:
+            str: Base64 encoded image string with mime type.
+            
+        Raises:
+            ValueError: If image size exceeds limits or format is unsupported.
+            FileNotFoundError: If image file doesn't exist.
+        """
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Image file not found: {image_path}")
+            
+        # Check file size before processing
+        file_size = os.path.getsize(image_path)
+        if file_size > VisionProcessor.MAX_BASE64_IMAGE_SIZE:
+            raise ValueError(
+                f"Image file size ({file_size} bytes) exceeds maximum allowed size "
+                f"({VisionProcessor.MAX_BASE64_IMAGE_SIZE} bytes)"
+            )
+
+        # Validate image format
+        mime_type, _ = mimetypes.guess_type(image_path)
+        if mime_type not in VisionProcessor.SUPPORTED_IMAGE_FORMATS:
+            raise ValueError(f"Unsupported image format: {mime_type}")
+
+        try:
+            with open(image_path, "rb") as image_file:
+                encoded = base64.b64encode(image_file.read()).decode('utf8')
+                return f"data:{mime_type};base64,{encoded}"
+        except Exception as e:
+            logger.error(f"Error encoding image: {str(e)}")
+            raise
+
+    @staticmethod
+    def prepare_vision_messages(
+        prompt: str,
+        image_source: Union[str, Dict[str, str]],
+        system_message: str = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Prepare messages for vision API calls.
+        
+        Args:
+            prompt (str): Text prompt to accompany the image
+            image_source (Union[str, Dict[str, str]]): Either an image path or URL
+            system_message (str, optional): System message to include
+            
+        Returns:
+            List[Dict[str, Any]]: Formatted messages for the API call
+        """
+        messages = []
+        
+        # Don't add system message if image is included (per API requirements)
+        if system_message and not image_source:
+            messages.append({
+                "role": "system",
+                "content": system_message
+            })
+
+        # Prepare user message with text and image
+        user_content = [{"type": "text", "text": prompt}]
+        
+        # Handle image source
+        if isinstance(image_source, str):
+            if urlparse(image_source).scheme in ['http', 'https']:
+                # URL image
+                image_url = image_source
+            else:
+                # Local file path
+                image_url = VisionProcessor.encode_image(image_source)
+        else:
+            # Already formatted image dict
+            image_url = image_source.get('url')
+
+        user_content.append({
+            "type": "image_url",
+            "image_url": {"url": image_url}
+        })
+
+        messages.append({
+            "role": "user",
+            "content": user_content
+        })
+
+        return messages
+
+    @staticmethod
+    def validate_image_url(url: str) -> bool:
+        """
+        Validate if the provided URL is acceptable for vision processing.
+        
+        Args:
+            url (str): URL to validate
+            
+        Returns:
+            bool: True if URL is valid, False otherwise
+        """
+        parsed = urlparse(url)
+        return bool(parsed.scheme and parsed.netloc)
 ```
 
 # pocketgroq\web_tool.py
@@ -1844,6 +2371,223 @@ def test_get_available_models():
         assert models[1]['id'] == "llama2-70b-4096"
         mock_get.assert_called_once_with("https://api.groq.com/openai/v1/models")
 
+```
+
+# tests\test_speech.py
+
+```python
+#!/usr/bin/env python
+import pytest
+import os
+from pocketgroq import GroqProvider
+
+def test_basic_transcription():
+    """Test basic audio transcription with a sample file."""
+    api_key = os.getenv('GROQ_API_KEY')
+    if not api_key:
+        pytest.skip("GROQ_API_KEY not set in environment")
+    
+    provider = GroqProvider(api_key=api_key)
+    
+    # Use a sample audio file (you'll need to provide this)
+    audio_file = "sample_audio.wav"
+    if not os.path.exists(audio_file):
+        pytest.skip(f"Test audio file {audio_file} not found")
+    
+    # Test transcription
+    response = provider.transcribe_audio(
+        audio_file=audio_file,
+        language="en"
+    )
+    
+    print("\nTranscription Response:")
+    print(response)
+    
+    # Verify meaningful response
+    assert len(response) > 0
+    # assert isinstance(response, dict)  # Since we're using json response_format
+    assert "cooking" in response
+
+def test_audio_translation():
+    """Test audio translation to English."""
+    api_key = os.getenv('GROQ_API_KEY')
+    if not api_key:
+        pytest.skip("GROQ_API_KEY not set in environment")
+    
+    provider = GroqProvider(api_key=api_key)
+    
+    # Use a sample non-English audio file
+    audio_file = "sample_french.wav"
+    if not os.path.exists(audio_file):
+        pytest.skip(f"Test audio file {audio_file} not found")
+    
+    # Test translation
+    response = provider.translate_audio(
+        audio_file=audio_file,
+        prompt="This is a French conversation about cooking."
+    )
+    
+    print("\nTranslation Response:")
+    print(response)
+    
+    # Verify meaningful response
+    assert len(response) > 0
+    # assert isinstance(response, dict)
+    assert "cooking" in response
+
+def test_invalid_audio():
+    """Test handling of invalid audio files."""
+    api_key = os.getenv('GROQ_API_KEY')
+    if not api_key:
+        pytest.skip("GROQ_API_KEY not set in environment")
+    
+    provider = GroqProvider(api_key=api_key)
+    
+    # Test invalid file format
+    with pytest.raises(ValueError) as exc_info:
+        provider.transcribe_audio("invalid.xyz")
+    assert "Unsupported audio format" in str(exc_info.value)
+    
+    # Test file too large (create temp file > 25MB)
+    with open("large.wav", "wb") as f:
+        f.write(b'0' * (26 * 1024 * 1024))
+    
+    with pytest.raises(ValueError) as exc_info:
+        provider.transcribe_audio("large.wav")
+    assert "exceeds maximum allowed size" in str(exc_info.value)
+    
+    os.remove("large.wav")  # Clean up
+
+if __name__ == '__main__':
+    pytest.main([__file__, '-v', '-s'])
+```
+
+# tests\test_vision.py
+
+```python
+#!/usr/bin/env python
+import pytest
+import os
+from pocketgroq import GroqProvider
+
+def test_desktop_vision():
+    """Test desktop screen capture and analysis."""
+    api_key = os.getenv('GROQ_API_KEY')
+    if not api_key:
+        pytest.skip("GROQ_API_KEY not set in environment")
+    
+    provider = GroqProvider(api_key=api_key)
+    
+    # Full screen analysis
+    response = provider.process_image_desktop(
+        prompt="Describe what you see on the screen. Focus on any visible windows, text, or UI elements."
+    )
+    
+    print("\nDesktop Analysis Response:")
+    print(response)
+    
+    # Verify meaningful response for full screen
+    assert len(response) > 50
+    assert any(word in response.lower() for word in ['window', 'screen', 'text', 'interface', 'display'])
+    
+    # Test specific region capture
+    region_response = provider.process_image_desktop_region(
+        prompt="What do you see in this region of the screen?",
+        x1=0,    # Top-left corner
+        y1=0,    # Top-left corner
+        x2=400,  # Width
+        y2=300   # Height
+    )
+    
+    print("\nScreen Region Analysis Response:")
+    print(region_response)
+    
+    # Verify meaningful response for region
+    assert len(region_response) > 50
+    # The content assertions should be appropriate for what's actually in that region
+    assert any(word in region_response.lower() for word in ['area', 'section', 'portion', 'region', 'part'])
+
+def test_real_vision():
+    """Test actual vision processing with a real image."""
+    # Use a real Groq API key from environment
+    api_key = os.getenv('GROQ_API_KEY')
+    if not api_key:
+        pytest.skip("GROQ_API_KEY not set in environment")
+    
+    provider = GroqProvider(api_key=api_key)
+    
+    # Use a real, stable image URL
+    image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/320px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
+    
+    # Process the actual image
+    response = provider.process_image(
+        prompt="Describe what you see in this image. Be specific.",
+        image_source=image_url
+    )
+    
+    # Verify we got a meaningful response
+    assert len(response) > 50  # Response should be substantial
+    assert "boardwalk" in response.lower() or "path" in response.lower()
+    assert "nature" in response.lower() or "trees" in response.lower()
+    
+    print("\nVision API Response:")
+    print(response)
+
+def test_multi_turn_conversation():
+    """Test a multi-turn conversation about an image."""
+    api_key = os.getenv('GROQ_API_KEY')
+    if not api_key:
+        pytest.skip("GROQ_API_KEY not set in environment")
+    
+    provider = GroqProvider(api_key=api_key)
+    
+    # Use same image for consistency
+    image_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/320px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
+    
+    # First turn: Ask about the image
+    conversation = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "What do you see in this image?"
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {"url": image_url}
+                }
+            ]
+        }
+    ]
+    
+    response1 = provider.process_image_conversation(messages=conversation)
+    print("\nFirst Response:")
+    print(response1)
+    
+    # Add the assistant's response to the conversation
+    conversation.append({
+        "role": "assistant",
+        "content": response1
+    })
+    
+    # Second turn: Ask a follow-up question
+    conversation.append({
+        "role": "user",
+        "content": "What materials do you think the boardwalk is made of?"
+    })
+    
+    response2 = provider.process_image_conversation(messages=conversation)
+    print("\nSecond Response:")
+    print(response2)
+    
+    # Verify meaningful responses
+    assert len(response1) > 50
+    assert len(response2) > 50
+    assert "wood" in response2.lower() or "wooden" in response2.lower() or "material" in response2.lower()
+
+if __name__ == '__main__':
+    pytest.main([__file__, '-v', '-s'])
 ```
 
 # pocketgroq\chain_of_thought\cot_manager.py

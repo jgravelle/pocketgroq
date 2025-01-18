@@ -20,6 +20,7 @@ from .web_tool import WebTool
 from .chain_of_thought.cot_manager import ChainOfThoughtManager
 from .chain_of_thought.llm_interface import LLMInterface
 from .rag_manager import RAGManager
+from .speech import SpeechProcessor
 from .vision import VisionProcessor
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ class GroqProvider(LLMInterface):
         self.rag_index_path = rag_index_path
         self.enhanced_web_tool = EnhancedWebTool()
         self.vision_processor = VisionProcessor()
+        self.speech_processor = SpeechProcessor()
 
         # Initialize conversation sessions
         self.conversation_sessions = defaultdict(list)  # session_id -> list of messages
@@ -298,6 +300,106 @@ class GroqProvider(LLMInterface):
             Dict[str, Any]: The scraped content in specified formats.
         """
         return self.enhanced_web_tool.scrape_page(url, formats)
+    
+    def transcribe_audio(
+        self, 
+        audio_file: str, 
+        language: Optional[str] = None,
+        prompt: Optional[str] = None,
+        response_format: str = "text",
+        temperature: float = 0,
+        model: str = "distil-whisper-large-v3-en"
+    ) -> str:
+        """
+        Transcribe audio file to text.
+        """
+        # Validate audio file
+        self.speech_processor.validate_audio_file(audio_file)
+        
+        # Get available speech models
+        speech_models = self.speech_processor.get_speech_models(self)
+        if model not in speech_models:
+            raise ValueError(f"Model {model} not available. Available models: {', '.join(speech_models)}")
+        
+        # Prepare API request
+        data = {
+            'model': model,
+            'temperature': temperature
+        }
+        
+        if language:
+            data['language'] = language
+        if prompt:
+            data['prompt'] = prompt
+            
+        # Prepare file
+        with open(audio_file, 'rb') as f:
+            files = {'file': ('audio.wav', f, 'audio/wav')}
+            
+            # Make raw API request
+            headers = {"Authorization": f"Bearer {self.api_key}"}
+            response = requests.post(
+                "https://api.groq.com/openai/v1/audio/transcriptions",
+                headers=headers,
+                data=data,
+                files=files
+            )
+            
+            if response.status_code != 200:
+                raise GroqAPIError(f"Error {response.status_code}: {response.text}")
+                
+            # Parse response based on format
+            if response_format == "text":
+                return response.json().get("text", "")
+            return response.text
+
+    def translate_audio(
+        self,
+        audio_file: str,
+        prompt: Optional[str] = None,
+        response_format: str = "text",
+        temperature: float = 0,
+        model: str = "whisper-large-v3"
+    ) -> str:
+        """
+        Translate audio file to English text.
+        """
+        # Validate audio file
+        self.speech_processor.validate_audio_file(audio_file)
+        
+        # Validate model
+        if model != "whisper-large-v3":
+            raise ValueError("Translation is only supported by the whisper-large-v3 model")
+        
+        # Prepare API request
+        data = {
+            'model': model,
+            'temperature': temperature
+        }
+        
+        if prompt:
+            data['prompt'] = prompt
+            
+        # Prepare file
+        with open(audio_file, 'rb') as f:
+            files = {'file': ('audio.wav', f, 'audio/wav')}
+            
+            # Make raw API request
+            headers = {"Authorization": f"Bearer {self.api_key}"}
+            response = requests.post(
+                "https://api.groq.com/openai/v1/audio/translations",
+                headers=headers,
+                data=data,
+                files=files
+            )
+            
+            if response.status_code != 200:
+                raise GroqAPIError(f"Error {response.status_code}: {response.text}")
+                
+            # Parse response based on format
+            if response_format == "text":
+                return response.json().get("text", "")
+            return response.text
 
     def end_conversation(self, conversation_id: str):
         """
