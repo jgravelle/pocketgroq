@@ -1,12 +1,15 @@
 README.md
 setup.py
 pocketgroq/__init__.py
+pocketgroq/autonomous_agent.py
 pocketgroq/config.py
 pocketgroq/enhanced_web_tool.py
 pocketgroq/exceptions.py
 pocketgroq/groq_provider.py
 pocketgroq/rag_manager.py
+pocketgroq/speech.py
 pocketgroq/utils.py
+pocketgroq/vision.py
 pocketgroq/web_tool.py
 pocketgroq.egg-info/PKG-INFO
 pocketgroq.egg-info/SOURCES.txt
@@ -18,3 +21,6 @@ pocketgroq/chain_of_thought/cot_manager.py
 pocketgroq/chain_of_thought/llm_interface.py
 pocketgroq/chain_of_thought/utils.py
 tests/test_groq_provider.py
+tests/test_narrate_screen.py
+tests/test_speech.py
+tests/test_vision.py

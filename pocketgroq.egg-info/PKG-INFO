@@ -1,10 +1,10 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.2
 Name: pocketgroq
-Version: 0.4.9
+Version: 0.5.6
 Summary: A library for easy integration with Groq API, including web scraping, image handling, and Chain of Thought reasoning
 Home-page: https://github.com/jgravelle/pocketgroq
 Author: PocketGroq Team
-Author-email: pocketgroq@example.com
+Author-email: j@gravelle.us
 Project-URL: Bug Tracker, https://github.com/jgravelle/pocketgroq/issues
 Classifier: Development Status :: 3 - Alpha
 Classifier: Intended Audience :: Developers
@@ -16,11 +16,14 @@ Classifier: Programming Language :: Python :: 3.8
 Classifier: Programming Language :: Python :: 3.9
 Classifier: Programming Language :: Python :: 3.10
 Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
 Requires-Python: >=3.7
 Description-Content-Type: text/markdown
 Requires-Dist: bs4>=0.0.2
 Requires-Dist: groq>=0.8.0
 Requires-Dist: python-dotenv>=0.19.1
+Requires-Dist: pytest>=7.3.1
+Requires-Dist: pytest-asyncio>=0.21.0
 Requires-Dist: requests>=2.32.3
 Requires-Dist: langchain>=0.3.1
 Requires-Dist: langchain-groq>=0.2.0
@@ -28,12 +31,206 @@ Requires-Dist: langchain-community>=0.3.1
 Requires-Dist: markdown2>=2.5.0
 Requires-Dist: faiss-cpu>=1.8.0.post1
 Requires-Dist: ollama>=0.3.3
+Requires-Dist: html2text>=2024.2.26
 Provides-Extra: dev
 Requires-Dist: pytest>=7.3.1; extra == "dev"
 Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: project-url
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
 
-# PocketGroq v0.4.8: Enhanced Web Capabilities and Flexible Ollama Integration
+# PocketGroq v0.5.6: Vision and Speech Processing Meets Autonomous Agents!
 ![PocketGroq Logo](https://github.com/user-attachments/assets/d06b6aaf-400e-40db-bdaf-626aaa1040ef)
+
+## What's New in v0.5.6
+
+## Vision Capabilities
+
+PocketGroq now includes powerful vision analysis capabilities, allowing you to process both images and screen content:
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+
+# Analyze an image from URL
+image_url = "https://example.com/image.jpg"
+response = groq.process_image(
+    prompt="What do you see in this image?",
+    image_source=image_url
+)
+
+print(f"Analysis: {response}")
+
+# Analyze your screen
+screen_analysis = groq.process_image_desktop(
+    prompt="What applications are open on my screen?"
+)
+
+print(f"Screen analysis: {screen_analysis}")
+
+# Analyze specific screen region
+region_analysis = groq.process_image_desktop_region(
+    prompt="What's in this part of the screen?",
+    x1=0,    # Top-left corner
+    y1=0,    # Top-left corner
+    x2=400,  # Width
+    y2=300   # Height
+)
+
+print(f"Region analysis: {region_analysis}")
+```
+
+You can also have multi-turn conversations about images:
+
+```python
+# Start a conversation about an image
+messages = [
+    {
+        "role": "user",
+        "content": [
+            {
+                "type": "text",
+                "text": "What do you see in this image?"
+            },
+            {
+                "type": "image_url",
+                "image_url": {"url": "https://example.com/image.jpg"}
+            }
+        ]
+    }
+]
+
+response1 = groq.process_image_conversation(messages=messages)
+print(f"First response: {response1}")
+
+# Add follow-up question
+messages.append({
+    "role": "assistant",
+    "content": response1
+})
+messages.append({
+    "role": "user",
+    "content": "What colors are most prominent?"
+})
+
+response2 = groq.process_image_conversation(messages=messages)
+print(f"Second response: {response2}")
+```
+
+## Speech Processing
+
+PocketGroq now supports advanced speech processing with transcription and translation capabilities:
+
+```python
+from pocketgroq import GroqProvider
+
+groq = GroqProvider()
+
+# Transcribe audio
+response = groq.transcribe_audio(
+    audio_file="recording.wav",
+    language="en",
+    model="distil-whisper-large-v3-en"  # Fastest for English
+)
+
+print(f"Transcription: {response}")
+
+# Translate audio to English
+translation = groq.translate_audio(
+    audio_file="french_speech.wav",
+    model="whisper-large-v3",  # Required for translation
+    prompt="This is a French conversation about cooking."
+)
+
+print(f"Translation: {translation}")
+```
+
+### Speech Model Selection
+
+PocketGroq offers three Whisper models with different capabilities:
+
+* `whisper-large-v3`: Best for multilingual tasks and translation ($0.111/hour)
+* `whisper-large-v3-turbo`: Fast multilingual transcription without translation ($0.04/hour)
+* `distil-whisper-large-v3-en`: Fastest English-only transcription ($0.02/hour)
+
+Choose your model based on your needs:
+- For translation: Use `whisper-large-v3`
+- For fast multilingual transcription: Use `whisper-large-v3-turbo`
+- For English-only transcription: Use `distil-whisper-large-v3-en`
+
+### Additional Speech Settings
+
+Fine-tune your speech processing:
+
+```python
+# Transcription with advanced options
+response = groq.transcribe_audio(
+    audio_file="recording.wav",
+    language="en",              # Specify language
+    prompt="Technical terms",   # Context for better accuracy
+    response_format="json",     # 'json' or 'text'
+    temperature=0.3            # Control variation
+)
+
+# Translation with custom settings
+translation = groq.translate_audio(
+    audio_file="speech.wav",
+    prompt="Medical terminology",  # Context for accuracy
+    response_format="json",        # Structured output
+    temperature=0              # Maximum accuracy
+)
+```
+
+## What's NEW in v0.5.4!
+
+## Autonomous Agent
+
+PocketGroq now includes an AutonomousAgent class that can autonomously research and answer questions:
+
+```python
+from pocketgroq import GroqProvider
+from pocketgroq.autonomous_agent import AutonomousAgent
+
+groq = GroqProvider()
+agent = AutonomousAgent(groq)
+
+request = "What is the current temperature in Sheboygan, Wisconsin?"
+response = agent.process_request(request)
+
+print(f"Final response: {response}")
+```
+
+The AutonomousAgent:
+- Attempts to answer the question using its initial knowledge.
+- If unsuccessful, it uses web search tools to find relevant information.
+- Evaluates each potential response for accuracy and completeness.
+- Keeps the user informed of its progress throughout the process.
+- Handles rate limiting and errors gracefully.
+
+You can customize the agent's behavior:
+
+```python
+# Set a custom maximum number of sources to check
+agent = AutonomousAgent(groq, max_sources=10)
+
+# Or specify it for a single request
+response = agent.process_request(request, max_sources=8)
+```
+
+The agent will search up to the specified number of sources, waiting at least 2 seconds between requests to avoid overwhelming the search services.
+
+### ALSO: get_available_models()
+
+(It does what you think it does.)
 
 ## What's New in v0.4.9
 
@@ -250,6 +447,16 @@ Here's a comprehensive list of all the methods/functions available in PocketGroq
 - `_sync_create_completion(**kwargs) -> Union[str, AsyncIterator[str]]`: Synchronous version of completion creation.
 - `_async_create_completion(**kwargs) -> Union[str, AsyncIterator[str]]`: Asynchronous version of completion creation.
 
+#### Vision Processing
+- `process_image(prompt: str, image_source: str) -> str`: Analyzes an image with given prompt.
+- `process_image_desktop(prompt: str, region=None) -> str`: Analyzes screen content.
+- `process_image_desktop_region(prompt: str, x1: int, y1: int, x2: int, y2: int) -> str`: Analyzes specific screen region.
+- `process_image_conversation(messages: List[Dict[str, Any]], model: str = None, **kwargs) -> str`: Handles multi-turn conversations about images.
+
+#### Speech Processing
+- `transcribe_audio(audio_file: str, language: Optional[str] = None, model: str = "distil-whisper-large-v3-en", **kwargs) -> str`: Transcribes audio to text.
+- `translate_audio(audio_file: str, model: str = "whisper-large-v3", **kwargs) -> str`: Translates non-English audio to English text.
+
 #### Conversation Management
 - `start_conversation(session_id: str)`: Initializes a new conversation session.
 - `reset_conversation(session_id: str)`: Resets an existing conversation session.
@@ -279,6 +486,8 @@ Here's a comprehensive list of all the methods/functions available in PocketGroq
 #### Utility Methods
 - `is_ollama_server_running() -> bool`: Checks if the Ollama server is running.
 - `ensure_ollama_server_running`: Decorator to ensure Ollama server is running for functions that require it.
+- `get_available_models() -> List[Dict[str, Any]]`: Retrieves list of available models.
+- `evaluate_response(request: str, response: str) -> bool`: Evaluates response quality.
 
 ### WebTool Class
 - `search(query: str) -> List[Dict[str, Any]]`: Performs a web search and returns filtered, deduplicated results.
@@ -298,7 +507,11 @@ Here's a comprehensive list of all the methods/functions available in PocketGroq
 - `synthesize_response(cot_steps: List[str]) -> str`: Synthesizes a final answer from Chain of Thought steps.
 - `solve_problem(problem: str) -> str`: Completes the entire Chain of Thought process to solve a problem.
 
-This comprehensive list covers all the main methods and functions available in PocketGroq, grouped logically by their functionality.
+### AutonomousAgent Class
+- `process_request(request: str, max_sources: int = None, verify: bool = False) -> str`: Processes a request autonomously.
+- `_select_best_response(verified_sources: List[tuple], verify: bool) -> str`: Selects the best response from verified sources.
+- `_generate_search_query(request: str) -> str`: Generates an optimized search query.
+- `_evaluate_response(request: str, response: str) -> bool`: Evaluates response quality.
 
 ## License
 

@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from typing import Dict, Any, List
 from urllib.parse import urlparse, quote_plus
 
-DEBUG = False  # Set to True for debugging
+DEBUG = True  # Set to True for debugging
 
 def log_debug(message):
     if DEBUG:
@@ -16,13 +16,24 @@ class WebTool:
         self.num_results = num_results
         self.max_tokens = max_tokens
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,/;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Referer': 'https://www.google.com/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Referer': 'https://www.bing.com/',
             'DNT': '1',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'same-origin',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
+            'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+            'Sec-Ch-Ua-Mobile': '?0',
+            'Sec-Ch-Ua-Platform': '"Windows"',
+            'Sec-Ch-Ua-Platform-Version': '"15.0.0"',
+            'X-Client-Data': 'CIe2yQEIpLbJAQipncoBCMzfygEIlKHLAQiFoM0BCJyrzQEI2rHNAQjcuM0BCNy4zQEIqrnNAQjxu80BCMa9zQEI1L3NAQjdvc0BCN69zQEIusDNAQ=='
         }
 
     def search(self, query: str) -> List[Dict[str, Any]]:
@@ -35,11 +46,19 @@ class WebTool:
 
     def _perform_web_search(self, query: str) -> List[Dict[str, Any]]:
         encoded_query = quote_plus(query)
-        search_url = f"https://www.google.com/search?q={encoded_query}&num={self.num_results * 2}"
+        search_url = (
+            f"https://www.bing.com/search?"
+            f"q={encoded_query}"
+            f"&count={self.num_results * 2}"  # Number of results
+            f"&setlang=en"  # Language
+            f"&cc=US"  # Country
+            f"&safesearch=off"  # Safe search setting
+            f"&ensearch=1"  # Ensure English results
+        )
         log_debug(f"Search URL: {search_url}")
         
         try:
-            log_debug("Sending GET request to Google")
+            log_debug("Sending GET request to Bing")
             response = requests.get(search_url, headers=self.headers, timeout=10)
             log_debug(f"Response status code: {response.status_code}")
             response.raise_for_status()
@@ -47,27 +66,91 @@ class WebTool:
             log_debug("Parsing HTML with BeautifulSoup")
             soup = BeautifulSoup(response.text, 'html.parser')
             
+            # Debug: Output first 500 chars of HTML to see structure
+            log_debug(f"First 500 chars of HTML:\n{response.text[:500]}")
+            
+            # Debug: Look for key elements
+            log_debug(f"Found {len(soup.find_all('div'))} total divs")
+            log_debug(f"Found {len(soup.find_all('h3'))} h3 elements")
+            log_debug(f"Found {len(soup.find_all('a', href=True))} links")
+            
             log_debug("Searching for result divs")
             search_results = []
-            for g in soup.find_all('div', class_='g'):
+            
+            # Find Bing search results
+            results = []
+            
+            # Look for main search results
+            results.extend(soup.find_all('li', {'class': 'b_algo'}))
+            
+            # Alternative approach for Bing's layout
+            if not results:
+                log_debug("Trying alternative Bing layout")
+                results.extend(soup.find_all(['div', 'li'], {'class': ['b_algo', 'b_attribution']}))
+            
+            # Fallback to any element that looks like a search result
+            if not results:
+                log_debug("Trying generic result patterns")
+                for element in soup.find_all(['li', 'div']):
+                    if (element.find('h2') and
+                        element.find('p') and
+                        element.find('a', href=lambda x: x and x.startswith('http'))):
+                        results.append(element)
+            
+            log_debug(f"Found {len(results)} potential result containers")
+            
+            for result in results:
                 log_debug("Processing a search result div")
-                anchor = g.find('a')
-                title = g.find('h3').text if g.find('h3') else 'No title'
-                url = anchor.get('href', 'No URL') if anchor else 'No URL'
                 
+                # Find title and URL from Bing's structure
+                h2_element = result.find('h2')
+                if not h2_element:
+                    log_debug("No title element found")
+                    continue
+                
+                link = h2_element.find('a')
+                if not link:
+                    log_debug("No link found")
+                    continue
+                
+                title = link.get_text(strip=True)
+                url = link.get('href', '')
+                
+                # Skip if we don't have both title and URL
+                if not title or not url or not url.startswith('http'):
+                    log_debug(f"Skipping result - Invalid title or URL: {title[:30]} - {url[:30]}")
+                    continue
+                
+                # Find description from Bing's structure
                 description = ''
-                description_div = g.find('div', class_=['VwiC3b', 'yXK7lf'])
-                if description_div:
-                    description = description_div.get_text(strip=True)
-                else:
-                    description = g.get_text(strip=True)
+                
+                # Try to find description in <p> tag
+                desc_element = result.find('p')
+                if desc_element:
+                    description = desc_element.get_text(strip=True)
+                
+                # If no description in <p>, try other common Bing classes
+                if not description:
+                    desc_candidates = result.find_all(['div', 'p'], {'class': ['b_caption', 'b_snippet']})
+                    for desc_div in desc_candidates:
+                        text = desc_div.get_text(strip=True)
+                        if text and len(text) > len(description):
+                            description = text
+                
+                # Fallback to any meaningful text
+                if not description:
+                    all_text = result.get_text(strip=True)
+                    if title in all_text:
+                        description = all_text[all_text.index(title) + len(title):].strip()
                 
                 log_debug(f"Found result: Title: {title[:30]}..., URL: {url[:30]}...")
-                search_results.append({
-                    'title': title,
-                    'description': description,
-                    'url': url
-                })
+                # Add a check to ensure that the URL is not None or empty
+                if url and url != 'No URL':
+                    search_results.append({
+                        'title': title,
+                        'description': description,
+                        'url': url
+                    })
             
             log_debug(f"Successfully retrieved {len(search_results)} search results for query: {query}")
             return search_results
